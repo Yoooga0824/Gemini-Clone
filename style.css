@@ -164,7 +164,6 @@ body.hide-header .header{
     -webkit-text-fill-color: transparent;
     white-space: nowrap;
 }
-
 .header__cursor{
     display: inline-block;
     margin-left: 0.12em;
@@ -270,6 +269,7 @@ body.hide-header .prompt{
     min-height: 4rem;
     display: flex;
     position: relative;
+    overflow: visible;
 }
 
 .prompt__file-input{
@@ -382,11 +382,17 @@ body.hide-header .prompt{
 }
 
 .prompt__attachments{
+    position: absolute;
+    top: calc(100% + 0.5rem);
+    left: 50%;
+    transform: translateX(-50%);
+    width: min(824px, calc(100vw - 2rem));
     display: flex;
     flex-wrap: wrap;
     gap: 0.45rem;
-    margin-top: 0.65rem;
+    justify-content: center;
     min-height: 0;
+    z-index: 2;
 }
 
 .prompt__attachment{
@@ -427,10 +433,17 @@ body.hide-header .prompt{
 }
 
 .prompt__disclaim{
+    position: fixed;
+    left: 50%;
+    bottom: 0.35rem;
+    transform: translateX(-50%);
+    width: min(824px, calc(100vw - 2rem));
     text-align: center;
     color: var(--placeholder-color);
     font-size: 0.85rem;
-    margin: 1rem 0 0;
+    margin: 0;
+    z-index: 900;
+    pointer-events: none;
 }
 
 @keyframes prompt-rise-in {
@@ -590,8 +603,10 @@ body.hide-header .prompt{
     line-height: 1.45;
     max-height: 520px;
     opacity: 1;
-    overflow: hidden;
+    overflow-x: hidden;
+    overflow-y: auto;
     transition: max-height 0.18s ease, opacity 0.18s ease;
+    scrollbar-width: thin;
 }
 
 .chats .message__reasoning-text p{
@@ -605,7 +620,21 @@ body.hide-header .prompt{
 .chats .message__reasoning--collapsed .message__reasoning-text{
     max-height: 0;
     opacity: 0;
+    overflow: hidden;
     transition-duration: 0.08s;
+}
+
+.chats .message__reasoning-text::-webkit-scrollbar{
+    width: 8px;
+}
+
+.chats .message__reasoning-text::-webkit-scrollbar-thumb{
+    background: var(--chat-scrollbar-thumb);
+    border-radius: 999px;
+}
+
+.chats .message__reasoning-text::-webkit-scrollbar-track{
+    background: transparent;
 }
 
 .hide{
@@ -853,6 +882,8 @@ blockquote{
 
     .prompt__disclaim{
         font-size: 0.8rem;
+        width: calc(100vw - 1.5rem);
+        bottom: 0.25rem;
     }
 
 }
