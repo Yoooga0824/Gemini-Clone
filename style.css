@@ -48,6 +48,7 @@
     --chat-scrollbar-track: #e5e9ef;
 }
 
+html,
 body{
     background: var(--primary-color);
 }
@@ -247,7 +248,10 @@ body.hide-header .header{
     padding: 1rem;
     transform: translateY(0);
     transition: transform 0.55s cubic-bezier(0.22, 1, 0.36, 1);
+    backface-visibility: hidden;
+    will-change: transform;
 }
+
 
 
 body:not(.hide-header) .prompt{
@@ -258,7 +262,7 @@ body:not(.hide-header) .prompt{
 }
 
 body.hide-header .prompt{
-    transform: translateY(0);
+    transform: none;
 }
 
 .prompt__input-wrapper{
@@ -338,7 +342,7 @@ body.hide-header .prompt{
     text-align: center;
     color: var(--placeholder-color);
     font-size: 0.85rem;
-    margin-top: 1rem;
+    margin: 1rem 0 0;
 }
 
 @keyframes prompt-rise-in {
