@@ -575,8 +575,8 @@ body.hide-header .prompt{
 
 .sidebar__collapse-btn{
     position: static;
-    width: var(--sidebar-icon-size);
-    height: var(--sidebar-icon-size);
+    width: var(--sidebar-action-size);
+    height: var(--sidebar-action-size);
     border: none;
     border-radius: 8px;
     background: transparent;
