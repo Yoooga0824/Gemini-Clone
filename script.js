@@ -248,6 +248,7 @@ const loadSavedChatHistory = () => {
                         <div class="message__reasoning-text"></div>
                     </div>
                     <p class="message__text"></p>
+                    <div class="message__thinking-status hide">深度思考中...</div>
                     <div class="message__loading-indicator hide">
                         <div class="message__loading-bar"></div>
                         <div class="message__loading-bar"></div>
@@ -446,6 +447,7 @@ const displayLoadingAnimation = () => {
                     <div class="message__reasoning-text"></div>
                 </div>
                 <p class="message__text"></p>
+                <div class="message__thinking-status">深度思考中...</div>
                 <div class="message__loading-indicator">
                     <div class="message__loading-bar"></div>
                     <div class="message__loading-bar"></div>

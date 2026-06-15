@@ -572,6 +572,17 @@ body.hide-header .prompt{
     display: flex;
 }
 
+.chats .message__thinking-status{
+    display: none;
+    color: var(--placeholder-color);
+    font-size: 0.82rem;
+    margin: 0.1rem 0 0.35rem;
+}
+
+.chats .message--loading .message__thinking-status{
+    display: block;
+}
+
 .chats .message__loading-indicator .message__loading-bar{
     height: 1rem;
     width: 100%;
