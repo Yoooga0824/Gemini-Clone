@@ -549,10 +549,11 @@ body.hide-header .prompt{
 
 .chats .message--incoming .message__text{
     white-space: normal;
-    line-height: 1.5;
+    line-height: 1.6;
     display: flex;
     flex-direction: column;
     gap: 14px;
+    font-size: 0.98rem;
 }
 
 .chats .message--incoming .message__text :where(h1, h2, h3, p, ul, ol, li, section, pre, blockquote){
@@ -565,6 +566,20 @@ body.hide-header .prompt{
 
 .chats .message--incoming .message__text :where(h1, h2, h3){
     line-height: 1.35;
+    letter-spacing: 0.01em;
+    font-weight: 650;
+}
+
+.chats .message--incoming .message__text h1{
+    font-size: 1.35rem;
+}
+
+.chats .message--incoming .message__text h2{
+    font-size: 1.18rem;
+}
+
+.chats .message--incoming .message__text h3{
+    font-size: 1.06rem;
 }
 
 .chats .message--incoming .message__text :where(ul, ol){
@@ -590,8 +605,10 @@ body.hide-header .prompt{
 }
 
 .chats .message--incoming .message__text blockquote{
-    padding-left: 0.9rem;
+    padding: 0.2rem 0 0.2rem 0.9rem;
     line-height: 1.45;
+    border-left: 3px solid rgba(96, 165, 250, 0.42);
+    color: var(--text-secondary-color);
 }
 
 .chats .message--incoming .message__text pre{
@@ -604,7 +621,7 @@ body.hide-header .prompt{
 
 .chats .message__reasoning{
     margin: 0 0 0.5rem;
-    padding: 0.5rem 0.7rem;
+    padding: 0.58rem 0.75rem;
     border-radius: 0.75rem;
     border: 1px solid rgba(126, 134, 146, 0.25);
     background: rgba(90, 98, 110, 0.08);
@@ -624,7 +641,25 @@ body.hide-header .prompt{
 .chats .message__reasoning-header{
     display: flex;
     align-items: center;
+    justify-content: space-between;
     margin-bottom: 0.3rem;
+}
+
+.chats .message__reasoning-header::after{
+    content: "⌄";
+    font-size: 0.82rem;
+    color: var(--placeholder-color);
+    transition: transform 0.18s ease;
+}
+
+.chats .message__reasoning--collapsed .message__reasoning-header::after{
+    transform: rotate(-90deg);
+}
+
+.chats .message__reasoning--loading .message__reasoning-title::after{
+    content: " · streaming";
+    color: var(--placeholder-color);
+    font-weight: 500;
 }
 
 .chats .message__reasoning-text{
@@ -640,7 +675,7 @@ body.hide-header .prompt{
 }
 
 .chats .message__reasoning-text p{
-    margin: 0 0 0.35rem;
+    margin: 0;
 }
 
 .chats .message__reasoning-text p:last-child{
@@ -652,6 +687,33 @@ body.hide-header .prompt{
     opacity: 0;
     overflow: hidden;
     transition-duration: 0.08s;
+}
+
+.chats .message--incoming .message__text.message__text--enhanced .message__group-card{
+    background: color-mix(in srgb, var(--secondary-color) 88%, transparent);
+    border: 1px solid color-mix(in srgb, var(--secondary-hover-color) 78%, transparent);
+    border-radius: 0.85rem;
+    padding: 0.72rem 0.88rem;
+}
+
+.chats .message--incoming .message__text.message__text--enhanced .message__group-card pre{
+    margin: 0;
+}
+
+.chats .message--incoming .message__text code{
+    font-family: "JetBrains Mono", "Fira Code", "Consolas", monospace;
+    font-size: 0.88em;
+    border-radius: 0.45rem;
+    background: color-mix(in srgb, var(--secondary-hover-color) 72%, transparent);
+    padding: 0.12rem 0.38rem;
+}
+
+.chats .message--incoming .message__text .message__inline-snippet{
+    margin: 0;
+}
+
+.chats .message--incoming .message__text .message__inline-snippet code{
+    display: inline-block;
 }
 
 .chats .message__reasoning-text::-webkit-scrollbar{
@@ -803,17 +865,26 @@ body.hide-header .prompt{
     }
 }
 
-.code__copy-btn{
+.chats .message--incoming .message__text .code__copy-btn{
     background-color: transparent;
     border: none;
     color: var(--text-color);
-    border-radius: 5px;
+    border-radius: 6px;
     cursor: pointer;
     position: absolute;
-    right: 10px;
-    top: 12px;
+    right: 8px;
+    top: 8px;
     z-index: 10;
-    font-size: 18px;
+    font-size: 16px;
+    width: 32px;
+    height: 32px;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+}
+
+.chats .message--incoming .message__text .code__copy-btn:hover{
+    background: color-mix(in srgb, var(--secondary-hover-color) 90%, transparent);
 }
 
 p{
@@ -849,41 +920,48 @@ td{
     padding: 10px;
 }
 
-pre{
+.chats .message--incoming .message__text pre{
     position: relative;
-    background-color: var(--secondary-color);
-    padding: 10px 0 0;
-    font-family: monospace;
+    background-color: color-mix(in srgb, var(--secondary-color) 86%, transparent);
+    padding: 2.15rem 0.9rem 0.9rem;
+    font-family: "JetBrains Mono", "Fira Code", "Consolas", monospace;
     font-size: 14px;
     border-radius: 10px;
+    border-left: 4px solid #5aa5ff;
     margin: 0;
     overflow-x: auto;
 }
 
-code{
-    margin-top: 30px;
-    border-radius: 5px;
+.chats .message--incoming .message__text pre code{
+    margin-top: 0;
+    border-radius: 0;
     color: inherit;
 }
 
-.code__language-label{
+.chats .message--incoming .message__text .code__language-label{
     position: absolute;
-    font-weight: bold;
-    top: 10px;
-    left: 12px;
+    font-weight: 600;
+    top: 8px;
+    left: 10px;
     color: var(--placeholder-color);
-    font-size: 14px;
+    font-size: 12px;
+    letter-spacing: 0.03em;
     text-transform: capitalize;
+    padding: 0.12rem 0.4rem;
+    border-radius: 999px;
+    border: 1px solid color-mix(in srgb, var(--secondary-hover-color) 70%, transparent);
+    background: color-mix(in srgb, var(--secondary-color) 80%, transparent);
 }
 
 .hljs{
     background-color: var(--secondary-color);
 }
 
-blockquote{
-    padding-left: 60px;
-    line-height: 2.5rem;
-    color: var(--text-color);
+.chats .message--incoming .message__text blockquote{
+    padding: 0.2rem 0 0.2rem 0.9rem;
+    line-height: 1.45;
+    border-left: 3px solid rgba(96, 165, 250, 0.42);
+    color: var(--text-secondary-color);
 }
 
 @media screen and (max-width: 980px) {

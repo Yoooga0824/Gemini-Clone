@@ -22,13 +22,10 @@ const FILE_ACCEPT =
 
 import config from "./config.js";
 
-// Initialize highlight.js with common languages
+// Initialize highlight.js fallback with common languages.
 hljs.configure({
-    languages: ['javascript', 'python', 'bash', 'typescript', 'json', 'html', 'css']
+  languages: ["javascript", "python", "bash", "typescript", "json", "html", "css"],
 });
-
-// Initialize highlight.js
-hljs.highlightAll();
 
 const API_REQUEST_URL = config.BACKEND_API_URL;
 const promptInput = messageForm.querySelector(".prompt__form-input");
@@ -43,6 +40,35 @@ let shouldAutoScroll = true;
 const pageScrollRoot = document.scrollingElement || document.documentElement;
 const THINK_TAG_PATTERN = /<think>\s*([\s\S]*?)\s*<\/think>/gi;
 const ENABLE_REASONING_OUTPUT = true;
+const REASONING_SCROLL_FOLLOW_THRESHOLD = 20;
+const SHORT_CODE_BLOCK_MAX_CHARS = 72;
+let shikiHighlighterPromise = null;
+
+const SHIKI_LANGUAGES = [
+  "javascript",
+  "typescript",
+  "jsx",
+  "tsx",
+  "json",
+  "bash",
+  "shell",
+  "go",
+  "python",
+  "java",
+  "c",
+  "cpp",
+  "html",
+  "css",
+  "markdown",
+  "yaml",
+  "sql",
+  "text",
+];
+
+marked.setOptions({
+  gfm: true,
+  breaks: true,
+});
 
 const formatBytes = (bytes = 0) => {
   if (bytes < 1024) return `${bytes} B`;
@@ -57,6 +83,112 @@ const escapeHtml = (text = "") =>
     .replace(/>/g, "&gt;")
     .replace(/"/g, "&quot;")
     .replace(/'/g, "&#39;");
+
+const getCurrentCodeTheme = () =>
+  themeRoot.classList.contains("light_mode") ? "github-light" : "github-dark";
+
+const getShikiHighlighter = async () => {
+  if (shikiHighlighterPromise) return shikiHighlighterPromise;
+  shikiHighlighterPromise = (async () => {
+    try {
+      const { createHighlighter } = await import("https://cdn.jsdelivr.net/npm/shiki@1.29.2/+esm");
+      return await createHighlighter({
+        themes: ["github-dark", "github-light"],
+        langs: SHIKI_LANGUAGES,
+      });
+    } catch (error) {
+      console.warn("Shiki unavailable, using highlight.js fallback.", error);
+      return null;
+    }
+  })();
+  return shikiHighlighterPromise;
+};
+
+const getCodeLanguage = (codeElement) => {
+  const languageClass = [...(codeElement?.classList || [])]
+    .find((cls) => cls.startsWith("language-"))
+    ?.replace("language-", "")
+    ?.toLowerCase();
+  if (!languageClass) return "text";
+  if (languageClass === "sh" || languageClass === "zsh") return "bash";
+  return languageClass;
+};
+
+const normalizeShortCodeBlocks = (rootElement) => {
+  if (!rootElement) return;
+  const codeBlocks = rootElement.querySelectorAll("pre code");
+  codeBlocks.forEach((codeElement) => {
+    const preElement = codeElement.closest("pre");
+    if (!preElement) return;
+    const rawCode = (codeElement.textContent || "").trim();
+    if (!rawCode) return;
+    const lineCount = rawCode.split(/\r?\n/).length;
+    if (lineCount > 1 || rawCode.length > SHORT_CODE_BLOCK_MAX_CHARS) return;
+    const inlineWrapper = document.createElement("p");
+    inlineWrapper.className = "message__inline-snippet";
+    const inlineCode = document.createElement("code");
+    inlineCode.textContent = rawCode;
+    inlineWrapper.appendChild(inlineCode);
+    preElement.replaceWith(inlineWrapper);
+  });
+};
+
+const applyContentGroupCards = (rootElement) => {
+  if (!rootElement) return;
+  rootElement.classList.add("message__text--enhanced");
+  const topLevelBlocks = [...rootElement.children].filter((node) =>
+    node.matches("p, ul, ol, pre, blockquote, table, section")
+  );
+  topLevelBlocks.forEach((node) => {
+    node.classList.add("message__group-card");
+  });
+};
+
+const applyShikiToMessageCodeBlocks = async (rootElement) => {
+  if (!rootElement) return;
+  const highlighter = await getShikiHighlighter();
+  if (!highlighter) {
+    rootElement.querySelectorAll("pre code").forEach((codeElement) => {
+      hljs.highlightElement(codeElement);
+    });
+    return;
+  }
+
+  const theme = getCurrentCodeTheme();
+  const loadedLanguages = new Set(highlighter.getLoadedLanguages().map((lang) => String(lang)));
+  const codeBlocks = rootElement.querySelectorAll("pre code");
+  for (const codeElement of codeBlocks) {
+    if (codeElement.dataset.shikiReady === "true") continue;
+    const preElement = codeElement.closest("pre");
+    if (!preElement) continue;
+
+    const sourceCode = codeElement.textContent || "";
+    const preferredLang = getCodeLanguage(codeElement);
+    const resolvedLang = loadedLanguages.has(preferredLang) ? preferredLang : "text";
+    const shikiHtml = highlighter.codeToHtml(sourceCode, {
+      lang: resolvedLang,
+      theme,
+    });
+
+    const wrapper = document.createElement("div");
+    wrapper.innerHTML = shikiHtml;
+    const shikiPre = wrapper.querySelector("pre");
+    if (!shikiPre) continue;
+    shikiPre.dataset.language = resolvedLang;
+    shikiPre.classList.add("code__block");
+    const shikiCode = shikiPre.querySelector("code");
+    if (shikiCode) shikiCode.dataset.shikiReady = "true";
+    preElement.replaceWith(shikiPre);
+  }
+};
+
+const enhanceMessageBody = async (messageElement) => {
+  if (!messageElement) return;
+  normalizeShortCodeBlocks(messageElement);
+  applyContentGroupCards(messageElement);
+  await applyShikiToMessageCodeBlocks(messageElement);
+  addCopyButtonToCodeBlocks(messageElement);
+};
 
 const renderPendingAttachments = () => {
   if (!attachmentList) return;
@@ -256,11 +388,14 @@ const extractReasoningAndContentFromMessage = (responseMessage = {}) => {
 
 const initReasoningPanelToggle = (incomingMessageElement) => {
   const reasoningPanel = incomingMessageElement.querySelector(".message__reasoning");
+  const reasoningTextElement = incomingMessageElement.querySelector(".message__reasoning-text");
   if (!reasoningPanel || reasoningPanel.dataset.bound === "true") return;
 
   reasoningPanel.dataset.bound = "true";
+  reasoningPanel.dataset.autoFollow = "true";
+  reasoningPanel.dataset.userCollapsed = "false";
   reasoningPanel.addEventListener("click", () => {
-    if (reasoningPanel.dataset.collapsible !== "true") return;
+    if (reasoningPanel.dataset.collapsible === "false") return;
     const selection = window.getSelection();
     const hasSelectedReasoningText =
       !!selection &&
@@ -271,7 +406,19 @@ const initReasoningPanelToggle = (incomingMessageElement) => {
     if (hasSelectedReasoningText) return;
     const collapsed = reasoningPanel.classList.toggle("message__reasoning--collapsed");
     reasoningPanel.dataset.expanded = collapsed ? "false" : "true";
+    reasoningPanel.dataset.userCollapsed = collapsed ? "true" : "false";
     scrollChatsToBottom("smooth");
+  });
+
+  if (!reasoningTextElement) return;
+  reasoningTextElement.addEventListener("scroll", () => {
+    if (reasoningTextElement.dataset.internalScrollSync === "true") return;
+    const distanceToBottom =
+      reasoningTextElement.scrollHeight -
+      reasoningTextElement.scrollTop -
+      reasoningTextElement.clientHeight;
+    reasoningPanel.dataset.autoFollow =
+      distanceToBottom <= REASONING_SCROLL_FOLLOW_THRESHOLD ? "true" : "false";
   });
 };
 
@@ -297,39 +444,74 @@ const renderReasoningPanel = (
   initReasoningPanelToggle(incomingMessageElement);
 
   const trimmedReasoning = reasoningText.trim();
+  const shouldAutoFollow = reasoningPanel.dataset.autoFollow !== "false";
+  const previousScrollTop = reasoningTextElement.scrollTop;
   if (!trimmedReasoning) {
     reasoningPanel.classList.remove("hide");
     reasoningPanel.classList.add("message__reasoning--collapsed");
     reasoningTextElement.innerHTML = `<p>本轮没有可展示的思考内容。</p>`;
     reasoningPanel.dataset.collapsible = "false";
     reasoningPanel.dataset.expanded = "false";
+    reasoningPanel.dataset.userCollapsed = "true";
     reasoningPanel.classList.add("message__reasoning--empty");
     return;
   }
 
   reasoningPanel.dataset.collapsible = "true";
   reasoningPanel.classList.remove("message__reasoning--empty");
+  reasoningPanel.classList.remove("message__reasoning--loading");
   reasoningPanel.classList.remove("hide");
-  if (collapseByDefault && !reasoningPanel.classList.contains("message__reasoning--collapsed")) {
+  const hasUserCollapsedPreference = reasoningPanel.dataset.userCollapsed === "true";
+  const hasUserExpandedPreference = reasoningPanel.dataset.userCollapsed === "false";
+  const hasInitializedState = reasoningPanel.dataset.expanded === "true" || reasoningPanel.dataset.expanded === "false";
+
+  if (!hasInitializedState) {
+    const shouldCollapseByDefault = collapseByDefault;
+    reasoningPanel.classList.toggle("message__reasoning--collapsed", shouldCollapseByDefault);
+    reasoningPanel.dataset.expanded = shouldCollapseByDefault ? "false" : "true";
+    reasoningPanel.dataset.userCollapsed = shouldCollapseByDefault ? "true" : "false";
+  } else if (hasUserCollapsedPreference) {
     reasoningPanel.classList.add("message__reasoning--collapsed");
     reasoningPanel.dataset.expanded = "false";
-  } else if (!collapseByDefault) {
+  } else if (!hasUserExpandedPreference && collapseByDefault) {
+    reasoningPanel.classList.add("message__reasoning--collapsed");
+    reasoningPanel.dataset.expanded = "false";
+  } else {
     reasoningPanel.classList.remove("message__reasoning--collapsed");
     reasoningPanel.dataset.expanded = "true";
   }
   reasoningTextElement.innerHTML = marked.parse(trimmedReasoning);
+  if (shouldAutoFollow) {
+    reasoningTextElement.dataset.internalScrollSync = "true";
+    reasoningTextElement.scrollTop = reasoningTextElement.scrollHeight;
+    reasoningTextElement.dataset.internalScrollSync = "false";
+    reasoningPanel.dataset.autoFollow = "true";
+  } else {
+    reasoningTextElement.dataset.internalScrollSync = "true";
+    reasoningTextElement.scrollTop = previousScrollTop;
+    reasoningTextElement.dataset.internalScrollSync = "false";
+  }
 };
 
 const showReasoningLoading = (incomingMessageElement) => {
   const reasoningPanel = incomingMessageElement.querySelector(".message__reasoning");
+  const reasoningTextElement = incomingMessageElement.querySelector(".message__reasoning-text");
   if (!reasoningPanel) return;
   if (!ENABLE_REASONING_OUTPUT) {
     reasoningPanel.classList.add("hide");
     return;
   }
-  reasoningPanel.dataset.collapsible = "false";
-  reasoningPanel.dataset.expanded = "false";
-  reasoningPanel.classList.add("hide");
+  initReasoningPanelToggle(incomingMessageElement);
+  reasoningPanel.dataset.collapsible = "true";
+  reasoningPanel.dataset.expanded = "true";
+  reasoningPanel.dataset.userCollapsed = "false";
+  reasoningPanel.dataset.autoFollow = "true";
+  reasoningPanel.classList.remove("hide", "message__reasoning--collapsed", "message__reasoning--empty");
+  reasoningPanel.classList.add("message__reasoning--loading");
+  if (reasoningTextElement) {
+    reasoningTextElement.innerHTML = "<p>深度思考中...</p>";
+    reasoningTextElement.scrollTop = reasoningTextElement.scrollHeight;
+  }
 };
 
 // Play opening title typing animation on each refresh
@@ -398,8 +580,7 @@ const showTypingEffect = (
   if (skipEffect) {
     // Display content directly without typing
     messageElement.innerHTML = htmlText;
-    hljs.highlightAll();
-    addCopyButtonToCodeBlocks();
+    void enhanceMessageBody(messageElement);
     actionsElement?.classList.remove("hide");
     isGeneratingResponse = false;
     scrollChatsToBottom("auto");
@@ -409,8 +590,7 @@ const showTypingEffect = (
   const tokens = Array.from(rawText || "");
   if (tokens.length === 0) {
     messageElement.innerHTML = htmlText;
-    hljs.highlightAll();
-    addCopyButtonToCodeBlocks();
+    void enhanceMessageBody(messageElement);
     actionsElement?.classList.remove("hide");
     isGeneratingResponse = false;
     scrollChatsToBottom("auto");
@@ -428,8 +608,7 @@ const showTypingEffect = (
       clearInterval(typingInterval);
       isGeneratingResponse = false;
       messageElement.innerHTML = htmlText;
-      hljs.highlightAll();
-      addCopyButtonToCodeBlocks();
+      void enhanceMessageBody(messageElement);
       actionsElement?.classList.remove("hide");
       scrollChatsToBottom("auto");
     }
@@ -728,8 +907,7 @@ const consumeAssistantEventStream = async (
     contentTypewriterTimer = null;
   }
   applyRender();
-  hljs.highlightAll();
-  addCopyButtonToCodeBlocks();
+  await enhanceMessageBody(messageElement);
   actionsElement?.classList.remove("hide");
   isGeneratingResponse = false;
   scrollChatsToBottom("auto");
@@ -807,18 +985,22 @@ const requestApiResponse = async (incomingMessageElement) => {
 };
 
 // Add copy button to code blocks
-const addCopyButtonToCodeBlocks = () => {
-  const codeBlocks = document.querySelectorAll("pre");
+const addCopyButtonToCodeBlocks = (scopeElement = document) => {
+  const codeBlocks = scopeElement.querySelectorAll("pre");
   codeBlocks.forEach((block) => {
+    if (block.querySelector(".code__copy-btn")) return;
     const codeElement = block.querySelector("code");
+    if (!codeElement) return;
     let language =
+      block.dataset.language ||
       [...codeElement.classList]
         .find((cls) => cls.startsWith("language-"))
-        ?.replace("language-", "") || "Text";
+        ?.replace("language-", "") ||
+      "text";
 
     const languageLabel = document.createElement("div");
     languageLabel.innerText =
-      language.charAt(0).toUpperCase() + language.slice(1);
+      language.charAt(0).toUpperCase() + language.slice(1).replaceAll("-", " ");
     languageLabel.classList.add("code__language-label");
     block.appendChild(languageLabel);
 
@@ -995,6 +1177,11 @@ themeToggleButton.addEventListener("click", () => {
   // Update icon based on theme
   const newIconClass = isLightTheme ? "bx bx-moon" : "bx bx-sun";
   themeToggleButton.querySelector("i").className = newIconClass;
+  document
+    .querySelectorAll(".chats .message--incoming .message__text")
+    .forEach((messageBody) => {
+      void enhanceMessageBody(messageBody);
+    });
 });
 
 // Voice input (Web Speech API)
