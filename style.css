@@ -788,6 +788,19 @@ body.sidebar-collapsed .sidebar__session-title{
     display: none;
 }
 
+body:not(.sidebar-collapsed) .sidebar__new-chat-btn{
+    width: 100%;
+    justify-content: flex-start;
+    padding: 0 10px;
+    gap: 8px;
+}
+
+body:not(.sidebar-collapsed) .sidebar__new-chat-btn .sidebar__label{
+    display: inline;
+    font-size: 0.9rem;
+    color: var(--text-color);
+}
+
 body.sidebar-collapsed .sidebar__section-title{
     display: none;
 }

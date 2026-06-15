@@ -505,23 +505,15 @@ const renderReasoningPanel = (
 
 const showReasoningLoading = (incomingMessageElement) => {
   const reasoningPanel = incomingMessageElement.querySelector(".message__reasoning");
-  const reasoningTextElement = incomingMessageElement.querySelector(".message__reasoning-text");
   if (!reasoningPanel) return;
   if (!ENABLE_REASONING_OUTPUT) {
     reasoningPanel.classList.add("hide");
     return;
   }
-  initReasoningPanelToggle(incomingMessageElement);
-  reasoningPanel.dataset.collapsible = "true";
-  reasoningPanel.dataset.expanded = "true";
-  reasoningPanel.dataset.userCollapsed = "false";
-  reasoningPanel.dataset.autoFollow = "true";
-  reasoningPanel.classList.remove("hide", "message__reasoning--collapsed", "message__reasoning--empty");
-  reasoningPanel.classList.add("message__reasoning--loading");
-  if (reasoningTextElement) {
-    reasoningTextElement.innerHTML = "<p>深度思考中...</p>";
-    reasoningTextElement.scrollTop = reasoningTextElement.scrollHeight;
-  }
+  reasoningPanel.dataset.collapsible = "false";
+  reasoningPanel.dataset.expanded = "false";
+  reasoningPanel.dataset.userCollapsed = "true";
+  reasoningPanel.classList.add("hide");
 };
 
 // Play opening title typing animation on each refresh
@@ -691,7 +683,6 @@ const bindSidebarEvents = () => {
 const loadSavedChatHistory = () => {
   localStorage.removeItem("saved-api-chats");
   const isLightTheme = localStorage.getItem("themeColor") === "light_mode";
-  const isSidebarCollapsed = localStorage.getItem("sidebarCollapsed") === "true";
 
   themeRoot.classList.toggle("light_mode", isLightTheme);
   themeToggleButton.innerHTML = isLightTheme
@@ -701,7 +692,7 @@ const loadSavedChatHistory = () => {
   chatSessions = [createSession("新聊天")];
   activeSessionId = chatSessions[0].id;
   renderSidebarSessions();
-  setSidebarCollapsed(isSidebarCollapsed);
+  setSidebarCollapsed(true);
   closeSidebarDrawer();
 
   chatHistoryContainer.innerHTML = "";
