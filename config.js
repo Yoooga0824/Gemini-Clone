@@ -1,8 +1,8 @@
 // Load configuration from environment variables
 const config = {
-  GEMINI_API_KEY: "AIzaSyCw7nVjXZ9sWu9M8zdwjb5jFVJsV5AXEbg",
-  API_BASE_URL: "https://generativelanguage.googleapis.com/v1",
-  MODEL_NAME: "gemini-2.0-flash",
+  DEEPSEEK_API_KEY: "sk-u3MSX9m6ny3JnwUvoXtMedCF8CnVGfZt2MyuyqFcKJYbcG85",
+  API_BASE_URL: "https://ai.saurlax.com",
+  MODEL_NAME: "deepseek-v3",
   MAX_TOKENS: 2048,
   TEMPERATURE: 0.7,
 };
