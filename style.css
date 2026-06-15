@@ -178,7 +178,7 @@ body.hide-header .header{
 
 
 body:not(.hide-header) .prompt{
-    top: calc(48% - 3.2rem);
+    top: calc(45% - 3.2rem);
     bottom: auto;
 }
 
