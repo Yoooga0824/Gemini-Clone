@@ -656,16 +656,23 @@ body:not(.sidebar-collapsed) .sidebar__brand{
     letter-spacing: 0.05em;
     color: var(--placeholder-color);
     padding: 0 0.2rem;
+    max-height: 28px;
+    opacity: 1;
+    overflow: hidden;
+    transition: opacity 0.22s ease, max-height 0.3s ease;
 }
 
 .sidebar__history{
     flex: 1;
     min-height: 0;
+    max-height: 1000px;
+    opacity: 1;
     overflow-y: auto;
     display: flex;
     flex-direction: column;
     gap: 0.32rem;
     padding-right: 0.15rem;
+    transition: opacity 0.22s ease, max-height 0.3s ease;
 }
 
 .sidebar__history::-webkit-scrollbar{
@@ -799,11 +806,15 @@ body:not(.sidebar-collapsed) .sidebar__new-chat-btn .sidebar__label{
 }
 
 body.sidebar-collapsed .sidebar__section-title{
-    display: none;
+    opacity: 0;
+    max-height: 0;
 }
 
 body.sidebar-collapsed .sidebar__history{
-    display: none;
+    opacity: 0;
+    max-height: 0;
+    pointer-events: none;
+    overflow: hidden;
 }
 
 .sidebar__new-chat-btn i,
@@ -835,7 +846,12 @@ body.sidebar-collapsed .sidebar__brand:hover .sidebar__brand-logo{
 }
 
 body.sidebar-collapsed .sidebar__collapse-btn{
-    display: none;
+    position: absolute;
+    inset: 0;
+    width: 100%;
+    height: 100%;
+    opacity: 0;
+    pointer-events: none;
 }
 
 body.sidebar-collapsed .sidebar__brand:hover .sidebar__expand-btn{
