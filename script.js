@@ -24,6 +24,8 @@ const themeRoot = document.documentElement;
 const headerTypingTitle = document.querySelector(".header__typing-title");
 const headerTypingText = document.querySelector(".header__typing-text");
 const headerCursor = document.querySelector(".header__cursor");
+const PROMPT_INPUT_MIN_HEIGHT = 64;
+const PROMPT_INPUT_MAX_HEIGHT = 180;
 const SCROLL_FOLLOW_THRESHOLD = 80;
 let shouldAutoScroll = true;
 const pageScrollRoot = document.scrollingElement || document.documentElement;
@@ -55,6 +57,23 @@ const scrollChatsToBottom = (behavior = "smooth", force = false) => {
   }
 
   scrollElement.scrollTo({ top: targetTop, behavior });
+};
+
+const adjustPromptInputHeight = () => {
+  if (!promptInput) return;
+  promptInput.style.height = "auto";
+  const nextHeight = Math.min(
+    Math.max(promptInput.scrollHeight, PROMPT_INPUT_MIN_HEIGHT),
+    PROMPT_INPUT_MAX_HEIGHT
+  );
+  promptInput.style.height = `${nextHeight}px`;
+  promptInput.style.overflowY =
+    promptInput.scrollHeight > PROMPT_INPUT_MAX_HEIGHT ? "auto" : "hidden";
+  const shouldLiftHeader = !document.body.classList.contains("hide-header");
+  const headerLiftOffset = shouldLiftHeader
+    ? Math.max(0, Math.round((nextHeight - PROMPT_INPUT_MIN_HEIGHT) * 0.9))
+    : 0;
+  themeRoot.style.setProperty("--prompt-expand-shift", `${headerLiftOffset}px`);
 };
 
 const extractReasoningAndContentFromMessage = (responseMessage = {}) => {
@@ -522,6 +541,8 @@ const handleOutgoingMessage = () => {
   scrollChatsToBottom("smooth");
 
   messageForm.reset(); // Clear input field
+  adjustPromptInputHeight();
+  themeRoot.style.setProperty("--prompt-expand-shift", "0px");
   document.body.classList.add("hide-header");
   setTimeout(displayLoadingAnimation, 500); // Show loading animation after delay
 };
@@ -618,6 +639,13 @@ voiceInputButton.addEventListener("click", () => {
 
 promptInput.addEventListener("focus", () => setHeaderCursorPaused(true));
 promptInput.addEventListener("blur", () => setHeaderCursorPaused(false));
+promptInput.addEventListener("input", adjustPromptInputHeight);
+promptInput.addEventListener("keydown", (e) => {
+  if (e.key !== "Enter") return;
+  if (e.shiftKey) return;
+  e.preventDefault();
+  handleOutgoingMessage();
+});
 chatHistoryContainer.addEventListener(
   "scroll",
   () => {
@@ -659,3 +687,4 @@ messageForm.addEventListener("submit", (e) => {
 // Load saved chat history on page load
 playHeaderTypingAnimation();
 loadSavedChatHistory();
+adjustPromptInputHeight();
