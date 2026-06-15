@@ -372,6 +372,109 @@ const showTypingEffect = (
   }, 25);
 };
 
+const consumeAssistantEventStream = async (
+  response,
+  messageElement,
+  incomingMessageElement
+) => {
+  if (!response.body) {
+    throw new Error("stream body unavailable");
+  }
+
+  const actionsElement = incomingMessageElement.querySelector(".message__actions");
+  actionsElement?.classList.add("hide");
+
+  const reader = response.body.getReader();
+  const decoder = new TextDecoder("utf-8");
+  let buffered = "";
+  let fullContent = "";
+  let fullReasoning = "";
+  let streamStarted = false;
+
+  const applyRender = () => {
+    const parsed = extractReasoningAndContentFromMessage({
+      content: fullContent,
+      reasoning_content: fullReasoning,
+    });
+    messageElement.innerHTML = marked.parse(parsed.content || "");
+    renderReasoningPanel(incomingMessageElement, parsed.reasoning);
+    scrollChatsToBottom("auto");
+  };
+
+  while (true) {
+    const { value, done } = await reader.read();
+    if (done) break;
+
+    buffered += decoder.decode(value, { stream: true });
+
+    let boundaryIndex = buffered.indexOf("\n\n");
+    while (boundaryIndex !== -1) {
+      const rawEvent = buffered.slice(0, boundaryIndex);
+      buffered = buffered.slice(boundaryIndex + 2);
+
+      const dataPayload = rawEvent
+        .split("\n")
+        .map((line) => line.trim())
+        .filter((line) => line.startsWith("data:"))
+        .map((line) => line.slice(5).trim())
+        .join("\n");
+
+      if (!dataPayload) {
+        boundaryIndex = buffered.indexOf("\n\n");
+        continue;
+      }
+
+      let eventData;
+      try {
+        eventData = JSON.parse(dataPayload);
+      } catch {
+        boundaryIndex = buffered.indexOf("\n\n");
+        continue;
+      }
+
+      if (eventData.type === "error") {
+        throw new Error(eventData.error || "stream failed");
+      }
+
+      if (eventData.type === "delta" || eventData.type === "done") {
+        if (typeof eventData.content === "string" && eventData.content) {
+          if (eventData.type === "delta") {
+            fullContent += eventData.content;
+          } else {
+            fullContent = eventData.content;
+          }
+        }
+        if (
+          typeof eventData.reasoning_content === "string" &&
+          eventData.reasoning_content
+        ) {
+          if (eventData.type === "delta") {
+            fullReasoning += eventData.reasoning_content;
+          } else {
+            fullReasoning = eventData.reasoning_content;
+          }
+        }
+
+        if (!streamStarted) {
+          incomingMessageElement.classList.remove("message--loading");
+          streamStarted = true;
+        }
+        applyRender();
+      }
+
+      boundaryIndex = buffered.indexOf("\n\n");
+    }
+  }
+
+  incomingMessageElement.classList.remove("message--loading");
+  applyRender();
+  hljs.highlightAll();
+  addCopyButtonToCodeBlocks();
+  actionsElement?.classList.remove("hide");
+  isGeneratingResponse = false;
+  scrollChatsToBottom("auto");
+};
+
 // Fetch API response based on user input
 const requestApiResponse = async (incomingMessageElement) => {
   const messageTextElement =
@@ -382,14 +485,39 @@ const requestApiResponse = async (incomingMessageElement) => {
       method: "POST",
       headers: {
         "Content-Type": "application/json",
+        Accept: "text/event-stream, application/json",
       },
       body: JSON.stringify({
         message: currentUserMessage,
       }),
     });
 
+    const responseContentType = response.headers.get("content-type") || "";
+    if (!response.ok) {
+      let errorMessage = "请求失败";
+      try {
+        if (responseContentType.includes("application/json")) {
+          const errorData = await response.json();
+          errorMessage = errorData?.error?.message || errorMessage;
+        } else {
+          errorMessage = (await response.text()) || errorMessage;
+        }
+      } catch {
+        // keep default
+      }
+      throw new Error(errorMessage);
+    }
+
+    if (responseContentType.includes("text/event-stream")) {
+      await consumeAssistantEventStream(
+        response,
+        messageTextElement,
+        incomingMessageElement
+      );
+      return;
+    }
+
     const responseData = await response.json();
-    if (!response.ok) throw new Error(responseData?.error?.message || "请求失败");
 
     const responseMessage = responseData?.choices?.[0]?.message;
     const { content: responseText, reasoning: reasoningText } =
@@ -546,7 +674,7 @@ const handleOutgoingMessage = () => {
   adjustPromptInputHeight();
   themeRoot.style.setProperty("--prompt-expand-shift", "0px");
   document.body.classList.add("hide-header");
-  setTimeout(displayLoadingAnimation, 500); // Show loading animation after delay
+  displayLoadingAnimation();
 };
 
 const handleFeedbackAction = (buttonElement, actionType) => {

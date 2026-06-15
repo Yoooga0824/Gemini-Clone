@@ -1,6 +1,7 @@
 package provider
 
 import (
+	"bufio"
 	"bytes"
 	"context"
 	"encoding/json"
@@ -54,6 +55,7 @@ type chatRequest struct {
 	Messages    []chatMessage `json:"messages"`
 	MaxTokens   int           `json:"max_tokens,omitempty"`
 	Temperature float64       `json:"temperature,omitempty"`
+	Stream      bool          `json:"stream,omitempty"`
 }
 
 type chatMessage struct {
@@ -64,6 +66,20 @@ type chatMessage struct {
 
 type chatResponse struct {
 	Choices []struct {
+		Message chatMessage `json:"message"`
+	} `json:"choices"`
+	Error *struct {
+		Message string `json:"message"`
+	} `json:"error,omitempty"`
+}
+
+type chatStreamChunk struct {
+	Choices []struct {
+		Delta struct {
+			Content          string `json:"content"`
+			ReasoningContent string `json:"reasoning_content"`
+			Reasoning        string `json:"reasoning"`
+		} `json:"delta"`
 		Message chatMessage `json:"message"`
 	} `json:"choices"`
 	Error *struct {
@@ -132,6 +148,130 @@ func (c *OpenAICompatibleClient) GenerateReply(ctx context.Context, userMessage 
 	)
 	if content == "" && reasoning == "" {
 		return model.AssistantReply{}, fmt.Errorf("upstream returned empty reply")
+	}
+
+	return model.AssistantReply{
+		Content:          content,
+		ReasoningContent: reasoning,
+	}, nil
+}
+
+// StreamReply streams chunks from upstream and returns final normalized assistant reply.
+func (c *OpenAICompatibleClient) StreamReply(
+	ctx context.Context,
+	userMessage string,
+	onDelta func(model.AssistantReplyDelta) error,
+) (model.AssistantReply, error) {
+	payload := chatRequest{
+		Model: c.model,
+		Messages: []chatMessage{
+			{Role: "user", Content: userMessage},
+		},
+		MaxTokens:   c.maxTokens,
+		Temperature: c.temperature,
+		Stream:      true,
+	}
+
+	bodyBytes, err := json.Marshal(payload)
+	if err != nil {
+		return model.AssistantReply{}, fmt.Errorf("marshal upstream stream request: %w", err)
+	}
+
+	url := c.baseURL + c.path
+	req, err := http.NewRequestWithContext(ctx, http.MethodPost, url, bytes.NewReader(bodyBytes))
+	if err != nil {
+		return model.AssistantReply{}, fmt.Errorf("create upstream stream request: %w", err)
+	}
+	req.Header.Set("Content-Type", "application/json")
+	req.Header.Set("Authorization", "Bearer "+c.apiKey)
+	req.Header.Set("Accept", "text/event-stream")
+
+	resp, err := c.httpClient.Do(req)
+	if err != nil {
+		return model.AssistantReply{}, fmt.Errorf("call upstream stream: %w", err)
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode >= 400 {
+		rawBody, readErr := io.ReadAll(resp.Body)
+		if readErr != nil {
+			return model.AssistantReply{}, fmt.Errorf("read upstream stream error response: %w", readErr)
+		}
+		var decoded chatResponse
+		_ = json.Unmarshal(rawBody, &decoded)
+		msg := "upstream stream request failed"
+		if decoded.Error != nil && decoded.Error.Message != "" {
+			msg = decoded.Error.Message
+		}
+		return model.AssistantReply{}, fmt.Errorf("%s (status %d)", msg, resp.StatusCode)
+	}
+
+	scanner := bufio.NewScanner(resp.Body)
+	scanner.Buffer(make([]byte, 0, 64*1024), 2*1024*1024)
+
+	var fullContent strings.Builder
+	var fullReasoning strings.Builder
+
+	for scanner.Scan() {
+		line := strings.TrimSpace(scanner.Text())
+		if line == "" || !strings.HasPrefix(line, "data:") {
+			continue
+		}
+
+		payloadLine := strings.TrimSpace(strings.TrimPrefix(line, "data:"))
+		if payloadLine == "" || payloadLine == "[DONE]" {
+			continue
+		}
+
+		var chunk chatStreamChunk
+		if err := json.Unmarshal([]byte(payloadLine), &chunk); err != nil {
+			continue
+		}
+		if chunk.Error != nil && chunk.Error.Message != "" {
+			return model.AssistantReply{}, fmt.Errorf("%s", chunk.Error.Message)
+		}
+		if len(chunk.Choices) == 0 {
+			continue
+		}
+
+		deltaContent := chunk.Choices[0].Delta.Content
+		deltaReasoning := chunk.Choices[0].Delta.ReasoningContent
+		if deltaReasoning == "" {
+			deltaReasoning = chunk.Choices[0].Delta.Reasoning
+		}
+
+		// Some providers send final data in message, not delta.
+		if deltaContent == "" && chunk.Choices[0].Message.Content != "" {
+			deltaContent = chunk.Choices[0].Message.Content
+		}
+		if deltaReasoning == "" && chunk.Choices[0].Message.ReasoningContent != "" {
+			deltaReasoning = chunk.Choices[0].Message.ReasoningContent
+		}
+
+		if deltaContent != "" {
+			fullContent.WriteString(deltaContent)
+		}
+		if deltaReasoning != "" {
+			fullReasoning.WriteString(deltaReasoning)
+		}
+
+		if onDelta != nil && (deltaContent != "" || deltaReasoning != "") {
+			if err := onDelta(model.AssistantReplyDelta{
+				Content:          deltaContent,
+				ReasoningContent: deltaReasoning,
+			}); err != nil {
+				return model.AssistantReply{}, err
+			}
+		}
+	}
+
+	if err := scanner.Err(); err != nil {
+		return model.AssistantReply{}, fmt.Errorf("read upstream stream: %w", err)
+	}
+
+	content, reasoning := splitReasoningAndContent(fullContent.String(), fullReasoning.String())
+	if content == "" && reasoning == "" {
+		return model.AssistantReply{}, fmt.Errorf("upstream stream returned empty reply")
 	}
 
 	return model.AssistantReply{

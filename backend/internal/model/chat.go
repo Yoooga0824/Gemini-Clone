@@ -37,3 +37,9 @@ type AssistantReply struct {
 	Content          string
 	ReasoningContent string
 }
+
+// AssistantReplyDelta is one streamed incremental chunk from upstream.
+type AssistantReplyDelta struct {
+	Content          string
+	ReasoningContent string
+}

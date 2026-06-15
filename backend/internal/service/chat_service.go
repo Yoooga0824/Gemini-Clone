@@ -12,6 +12,11 @@ import (
 // This is a classic "dependency inversion" pattern.
 type Generator interface {
 	GenerateReply(ctx context.Context, userMessage string) (model.AssistantReply, error)
+	StreamReply(
+		ctx context.Context,
+		userMessage string,
+		onDelta func(model.AssistantReplyDelta) error,
+	) (model.AssistantReply, error)
 }
 
 // ChatService contains business logic (validation, orchestration).
@@ -31,4 +36,17 @@ func (s *ChatService) Reply(ctx context.Context, userMessage string) (model.Assi
 	}
 
 	return s.generator.GenerateReply(ctx, trimmed)
+}
+
+func (s *ChatService) StreamReply(
+	ctx context.Context,
+	userMessage string,
+	onDelta func(model.AssistantReplyDelta) error,
+) (model.AssistantReply, error) {
+	trimmed := strings.TrimSpace(userMessage)
+	if trimmed == "" {
+		return model.AssistantReply{}, fmt.Errorf("message cannot be empty")
+	}
+
+	return s.generator.StreamReply(ctx, trimmed, onDelta)
 }
