@@ -1,10 +1,6 @@
-// Load configuration from environment variables
+// Frontend runtime config (no secrets here).
 const config = {
-  DEEPSEEK_API_KEY: "sk-u3MSX9m6ny3JnwUvoXtMedCF8CnVGfZt2MyuyqFcKJYbcG85",
-  API_BASE_URL: "https://ai.saurlax.com",
-  MODEL_NAME: "deepseek-v3",
-  MAX_TOKENS: 2048,
-  TEMPERATURE: 0.7,
+  BACKEND_API_URL: "http://localhost:8080/api/chat",
 };
 
 export default config;

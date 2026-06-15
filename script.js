@@ -18,13 +18,15 @@ hljs.configure({
 // Initialize highlight.js
 hljs.highlightAll();
 
-const API_REQUEST_URL = `${config.API_BASE_URL}/v1/chat/completions`;
+const API_REQUEST_URL = config.BACKEND_API_URL;
 const promptInput = messageForm.querySelector(".prompt__form-input");
 
 // Load saved data from local storage
 const loadSavedChatHistory = () => {
-  const savedConversations =
-    JSON.parse(localStorage.getItem("saved-api-chats")) || [];
+  // We no longer persist chat history across refreshes.
+  // Clear old data once so the UI always starts from the welcome screen.
+  localStorage.removeItem("saved-api-chats");
+  const savedConversations = [];
   const isLightTheme = localStorage.getItem("themeColor") === "light_mode";
 
   document.body.classList.toggle("light_mode", isLightTheme);
@@ -149,21 +151,13 @@ const requestApiResponse = async (incomingMessageElement) => {
     incomingMessageElement.querySelector(".message__text");
 
   try {
-    const headers = {
-      "Content-Type": "application/json",
-    };
-    if (config.DEEPSEEK_API_KEY) {
-      headers.Authorization = `Bearer ${config.DEEPSEEK_API_KEY}`;
-    }
-
     const response = await fetch(API_REQUEST_URL, {
       method: "POST",
-      headers,
+      headers: {
+        "Content-Type": "application/json",
+      },
       body: JSON.stringify({
-        model: config.MODEL_NAME,
-        messages: [{ role: "user", content: currentUserMessage }],
-        max_tokens: config.MAX_TOKENS,
-        temperature: config.TEMPERATURE,
+        message: currentUserMessage,
       }),
     });
 
@@ -184,14 +178,7 @@ const requestApiResponse = async (incomingMessageElement) => {
       incomingMessageElement
     );
 
-    // Save conversation in local storage
-    let savedConversations =
-      JSON.parse(localStorage.getItem("saved-api-chats")) || [];
-    savedConversations.push({
-      userMessage: currentUserMessage,
-      apiResponse: responseData,
-    });
-    localStorage.setItem("saved-api-chats", JSON.stringify(savedConversations));
+    // Chat history persistence is intentionally disabled.
   } catch (error) {
     isGeneratingResponse = false;
     messageTextElement.innerText = error.message;
