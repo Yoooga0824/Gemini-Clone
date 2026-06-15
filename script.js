@@ -858,7 +858,7 @@ const displayLoadingAnimation = () => {
                     </div>
                     <div class="message__reasoning-text"></div>
                 </div>
-                <p class="message__text"></p>
+                <div class="message__text"></div>
                 <div class="message__thinking-status">深度思考中...</div>
                 <div class="message__loading-indicator">
                     <div class="message__loading-bar"></div>
@@ -920,7 +920,7 @@ const handleOutgoingMessage = async () => {
 
         <div class="message__content">
             <img class="message__avatar" src="assets/profile.png" alt="User avatar">
-            <p class="message__text"></p>
+            <div class="message__text"></div>
         </div>
 
     `;

@@ -547,41 +547,59 @@ body.hide-header .prompt{
     line-height: 1.2;
 }
 
-.chats .message__text p{
-    margin: 0 0 0.42rem;
+.chats .message--incoming .message__text{
+    white-space: normal;
+    line-height: 1.5;
+    display: flex;
+    flex-direction: column;
+    gap: 14px;
 }
 
-.chats .message__text p:last-child{
-    margin-bottom: 0;
+.chats .message--incoming .message__text :where(h1, h2, h3, p, ul, ol, li, section, pre, blockquote){
+    margin: 0;
 }
 
-.chats .message__text ul,
-.chats .message__text ol{
-    margin: 0.16rem 0 0.2rem 1rem;
-    padding-left: 0.2rem;
+.chats .message--incoming .message__text :where(h1, h2, h3, p, section){
+    padding: 0;
 }
 
-.chats .message__text li{
-    margin-bottom: 0.04rem;
-    line-height: 1.12;
+.chats .message--incoming .message__text :where(h1, h2, h3){
+    line-height: 1.35;
 }
 
-.chats .message__text li p{
-    margin: 0 0 0.16rem;
+.chats .message--incoming .message__text :where(ul, ol){
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+    padding-left: 1.25rem;
 }
 
-.chats .message__text li p:last-child{
-    margin-bottom: 0;
+.chats .message--incoming .message__text li{
+    line-height: 1.5;
+    padding: 0;
 }
 
-.chats .message__text blockquote{
+.chats .message--incoming .message__text section{
+    display: flex;
+    flex-direction: column;
+    gap: 14px;
+}
+
+.chats .message--incoming .message__text section + section{
+    padding-top: 12px;
+}
+
+.chats .message--incoming .message__text blockquote{
     padding-left: 0.9rem;
-    line-height: 1.25;
-    margin: 0.4rem 0;
+    line-height: 1.45;
 }
 
-.chats .message__text pre{
-    margin: 0.9rem 0;
+.chats .message--incoming .message__text pre{
+    margin: 0;
+}
+
+.chats .message--incoming .message__text pre code{
+    margin-top: 0;
 }
 
 .chats .message__reasoning{
