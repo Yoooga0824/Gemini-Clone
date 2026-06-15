@@ -235,10 +235,7 @@ const setHeaderCursorPaused = (paused) => {
 
 // Load saved data from local storage
 const loadSavedChatHistory = () => {
-  // We no longer persist chat history across refreshes.
-  // Clear old data once so the UI always starts from the welcome screen.
   localStorage.removeItem("saved-api-chats");
-  const savedConversations = [];
   const isLightTheme = localStorage.getItem("themeColor") === "light_mode";
 
   themeRoot.classList.toggle("light_mode", isLightTheme);
@@ -247,86 +244,7 @@ const loadSavedChatHistory = () => {
     : '<i class="bx bx-sun"></i>';
 
   chatHistoryContainer.innerHTML = "";
-
-  // Iterate through saved chat history and display messages
-  savedConversations.forEach((conversation) => {
-    // Display the user's message
-    const userMessageHtml = `
-
-            <div class="message__content">
-                <img class="message__avatar" src="assets/profile.png" alt="User avatar">
-               <p class="message__text">${conversation.userMessage}</p>
-            </div>
-
-        `;
-
-    const outgoingMessageElement = createChatMessageElement(
-      userMessageHtml,
-      "message--outgoing"
-    );
-    chatHistoryContainer.appendChild(outgoingMessageElement);
-
-    // Display the API response
-    const responseMessage =
-      conversation.apiResponse?.choices?.[0]?.message;
-    const { content: responseText, reasoning: reasoningText } =
-      extractReasoningAndContentFromMessage(responseMessage);
-    const fallbackText =
-      conversation.apiResponse?.candidates?.[0]?.content?.parts?.[0]?.text;
-    const finalResponseText = responseText || fallbackText || "";
-    const parsedApiResponse = marked.parse(finalResponseText); // Convert to HTML
-    const rawApiResponse = finalResponseText; // Plain text version
-
-    const responseHtml = `
-
-           <div class="message__content">
-                <img class="message__avatar" src="assets/YoooFind.png" alt="Gemini avatar">
-                <div class="message__body">
-                    <div class="message__reasoning">
-                        <div class="message__reasoning-header">
-                            <div class="message__reasoning-title">深度思考</div>
-                        </div>
-                        <div class="message__reasoning-text"></div>
-                    </div>
-                    <p class="message__text"></p>
-                    <div class="message__thinking-status hide">深度思考中...</div>
-                    <div class="message__loading-indicator hide">
-                        <div class="message__loading-bar"></div>
-                        <div class="message__loading-bar"></div>
-                        <div class="message__loading-bar"></div>
-                    </div>
-                </div>
-            </div>
-            <div class="message__actions hide">
-                <button type="button" class="message__action-btn" data-action="copy" title="复制"><i class='bx bx-copy-alt'></i></button>
-                <button type="button" class="message__action-btn" data-action="like" title="点赞"><i class='bx bx-like'></i></button>
-                <button type="button" class="message__action-btn" data-action="dislike" title="点踩"><i class='bx bx-dislike'></i></button>
-                <button type="button" class="message__action-btn" data-action="retry" title="重试"><i class='bx bx-refresh'></i></button>
-            </div>
-
-        `;
-
-    const incomingMessageElement = createChatMessageElement(
-      responseHtml,
-      "message--incoming"
-    );
-    chatHistoryContainer.appendChild(incomingMessageElement);
-
-    const messageTextElement =
-      incomingMessageElement.querySelector(".message__text");
-
-    // Display saved chat without typing effect
-    showTypingEffect(
-      rawApiResponse,
-      parsedApiResponse,
-      messageTextElement,
-      incomingMessageElement,
-      true,
-      reasoningText
-    ); // 'true' skips typing
-  });
-
-  document.body.classList.toggle("hide-header", savedConversations.length > 0);
+  document.body.classList.remove("hide-header");
 };
 
 

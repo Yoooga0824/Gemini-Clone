@@ -8,7 +8,6 @@ import (
 	"gemini-clone/backend/internal/api/handlers"
 )
 
-// NewRouter wires routes and wraps them with CORS middleware.
 func NewRouter(chatHandler *handlers.ChatHandler, allowedOrigin string) http.Handler {
 	mux := http.NewServeMux()
 
@@ -43,8 +42,6 @@ func withCORS(next http.Handler, allowedOrigin string) http.Handler {
 }
 
 func parseAllowedOrigins(raw string) map[string]struct{} {
-	// ALLOWED_ORIGIN supports comma-separated values, for example:
-	// http://localhost:3000,http://localhost:3001,http://127.0.0.1:3001
 	origins := map[string]struct{}{}
 
 	if strings.TrimSpace(raw) == "" {

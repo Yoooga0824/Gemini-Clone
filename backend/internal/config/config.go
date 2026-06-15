@@ -7,11 +7,6 @@ import (
 	"strings"
 )
 
-// Config holds all backend runtime settings.
-//
-// For a beginner-friendly structure:
-// - Server* fields are for the Go HTTP server itself.
-// - Upstream* fields are for the LLM provider endpoint.
 type Config struct {
 	ServerPort    string
 	AllowedOrigin string
@@ -24,18 +19,13 @@ type Config struct {
 	Temperature     float64
 }
 
-// Load reads environment variables and applies sensible defaults.
-//
-// IMPORTANT:
-// UpstreamAPIKey is required. We keep it in backend env vars
-// so the frontend never sees or stores the secret.
 func Load() (Config, error) {
 	cfg := Config{
 		ServerPort:      getEnv("SERVER_PORT", "8080"),
 		AllowedOrigin:   getEnv("ALLOWED_ORIGIN", "http://localhost:3000"),
 		UpstreamBaseURL: getEnv("UPSTREAM_BASE_URL", "https://api.deepseek.com"),
 		UpstreamPath:    getEnv("UPSTREAM_PATH", "/v1/chat/completions"),
-		UpstreamAPIKey:  stringsTrim(getEnv("UPSTREAM_API_KEY", "")),
+		UpstreamAPIKey:  strings.TrimSpace(getEnv("UPSTREAM_API_KEY", "")),
 		UpstreamModel:   getEnv("UPSTREAM_MODEL", "deepseek-chat"),
 		MaxTokens:       getEnvInt("UPSTREAM_MAX_TOKENS", 2048),
 		Temperature:     getEnvFloat("UPSTREAM_TEMPERATURE", 0.7),
@@ -78,9 +68,4 @@ func getEnvFloat(key string, fallback float64) float64 {
 		return fallback
 	}
 	return n
-}
-
-func stringsTrim(v string) string {
-	// Copied API keys may accidentally include leading/trailing spaces.
-	return strings.TrimSpace(v)
 }
