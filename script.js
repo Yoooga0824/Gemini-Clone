@@ -625,6 +625,15 @@ const resetChatCanvas = () => {
 
 const handleCreateNewChat = () => {
   if (isGeneratingResponse) return;
+  const currentSession = chatSessions.find((session) => session.id === activeSessionId);
+  const isAlreadyFreshChat =
+    !!currentSession &&
+    currentSession.title === "新聊天" &&
+    chatHistoryContainer.children.length === 0;
+  if (isAlreadyFreshChat) {
+    if (isMobileViewport()) closeSidebarDrawer();
+    return;
+  }
   const newSession = createSession("新聊天");
   chatSessions = [newSession, ...chatSessions];
   setActiveSession(newSession.id);
