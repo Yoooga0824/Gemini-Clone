@@ -20,8 +20,41 @@ hljs.highlightAll();
 
 const API_REQUEST_URL = config.BACKEND_API_URL;
 const promptInput = messageForm.querySelector(".prompt__form-input");
+const themeRoot = document.documentElement;
 const headerTypingTitle = document.querySelector(".header__typing-title");
 const headerTypingText = document.querySelector(".header__typing-text");
+const headerCursor = document.querySelector(".header__cursor");
+const SCROLL_FOLLOW_THRESHOLD = 80;
+let shouldAutoScroll = true;
+const pageScrollRoot = document.scrollingElement || document.documentElement;
+
+const getActiveScrollElement = () => {
+  const canScrollInChats =
+    chatHistoryContainer.scrollHeight > chatHistoryContainer.clientHeight + 1;
+  return canScrollInChats ? chatHistoryContainer : pageScrollRoot;
+};
+
+const isActiveScrollNearBottom = () => {
+  const scrollElement = getActiveScrollElement();
+  const distanceToBottom =
+    scrollElement.scrollHeight -
+    scrollElement.scrollTop -
+    scrollElement.clientHeight;
+  return distanceToBottom <= SCROLL_FOLLOW_THRESHOLD;
+};
+
+const scrollChatsToBottom = (behavior = "smooth", force = false) => {
+  if (!force && !shouldAutoScroll) return;
+  const scrollElement = getActiveScrollElement();
+  const targetTop = scrollElement.scrollHeight;
+
+  if (scrollElement === pageScrollRoot) {
+    window.scrollTo({ top: targetTop, behavior });
+    return;
+  }
+
+  scrollElement.scrollTo({ top: targetTop, behavior });
+};
 
 // Play opening title typing animation on each refresh
 const playHeaderTypingAnimation = () => {
@@ -42,6 +75,12 @@ const playHeaderTypingAnimation = () => {
   });
 };
 
+// Pause header cursor while prompt input is focused
+const setHeaderCursorPaused = (paused) => {
+  if (!headerCursor) return;
+  headerCursor.classList.toggle("header__cursor--paused", paused);
+};
+
 // Load saved data from local storage
 const loadSavedChatHistory = () => {
   // We no longer persist chat history across refreshes.
@@ -50,7 +89,7 @@ const loadSavedChatHistory = () => {
   const savedConversations = [];
   const isLightTheme = localStorage.getItem("themeColor") === "light_mode";
 
-  document.body.classList.toggle("light_mode", isLightTheme);
+  themeRoot.classList.toggle("light_mode", isLightTheme);
   themeToggleButton.innerHTML = isLightTheme
     ? '<i class="bx bx-moon"></i>'
     : '<i class="bx bx-sun"></i>';
@@ -146,6 +185,7 @@ const showTypingEffect = (
     addCopyButtonToCodeBlocks();
     copyIconElement.classList.remove("hide"); // Show copy button
     isGeneratingResponse = false;
+    scrollChatsToBottom("auto");
     return;
   }
 
@@ -155,6 +195,7 @@ const showTypingEffect = (
   const typingInterval = setInterval(() => {
     messageElement.innerText +=
       (wordIndex === 0 ? "" : " ") + wordsArray[wordIndex++];
+    scrollChatsToBottom("auto");
     if (wordIndex === wordsArray.length) {
       clearInterval(typingInterval);
       isGeneratingResponse = false;
@@ -162,6 +203,7 @@ const showTypingEffect = (
       hljs.highlightAll();
       addCopyButtonToCodeBlocks();
       copyIconElement.classList.remove("hide");
+      scrollChatsToBottom("auto");
     }
   }, 75);
 };
@@ -271,6 +313,7 @@ const displayLoadingAnimation = () => {
     "message--loading"
   );
   chatHistoryContainer.appendChild(loadingMessageElement);
+  scrollChatsToBottom("smooth");
 
   requestApiResponse(loadingMessageElement);
 };
@@ -296,6 +339,7 @@ const handleOutgoingMessage = () => {
   if (!currentUserMessage || isGeneratingResponse) return; // Exit if no message or already generating response
 
   isGeneratingResponse = true;
+  shouldAutoScroll = true;
 
   const outgoingMessageHtml = `
 
@@ -313,6 +357,7 @@ const handleOutgoingMessage = () => {
   outgoingMessageElement.querySelector(".message__text").innerText =
     currentUserMessage;
   chatHistoryContainer.appendChild(outgoingMessageElement);
+  scrollChatsToBottom("smooth");
 
   messageForm.reset(); // Clear input field
   document.body.classList.add("hide-header");
@@ -321,7 +366,7 @@ const handleOutgoingMessage = () => {
 
 // Toggle between light and dark themes
 themeToggleButton.addEventListener("click", () => {
-  const isLightTheme = document.body.classList.toggle("light_mode");
+  const isLightTheme = themeRoot.classList.toggle("light_mode");
   localStorage.setItem("themeColor", isLightTheme ? "light_mode" : "dark_mode");
 
   // Update icon based on theme
@@ -365,6 +410,23 @@ voiceInputButton.addEventListener("click", () => {
 
   recognition.start();
 });
+
+promptInput.addEventListener("focus", () => setHeaderCursorPaused(true));
+promptInput.addEventListener("blur", () => setHeaderCursorPaused(false));
+chatHistoryContainer.addEventListener(
+  "scroll",
+  () => {
+    shouldAutoScroll = isActiveScrollNearBottom();
+  },
+  { passive: true }
+);
+window.addEventListener(
+  "scroll",
+  () => {
+    shouldAutoScroll = isActiveScrollNearBottom();
+  },
+  { passive: true }
+);
 
 // Prevent default from submission and handle outgoing message
 messageForm.addEventListener("submit", (e) => {

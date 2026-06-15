@@ -22,6 +22,9 @@
     --text-secondary-color: #D8D8D8;
     --heading-secondary-color: #444746;
     --placeholder-color: #ABAFB3;
+    --chat-scrollbar-thumb: #161616;
+    --chat-scrollbar-thumb-hover: #2a2a2a;
+    --chat-scrollbar-track: #000000;
 }
 
 .light_mode{
@@ -38,10 +41,40 @@
     --text-secondary-color: #4D4D4D;
     --heading-secondary-color: #C4C7C5;
     --placeholder-color: #717075;
+    --chat-scrollbar-thumb: #b6bec8;
+    --chat-scrollbar-thumb-hover: #9fa8b2;
+    --chat-scrollbar-track: #e5e9ef;
 }
 
 body{
     background: var(--primary-color);
+}
+
+html{
+    scrollbar-color: var(--chat-scrollbar-thumb) var(--chat-scrollbar-track);
+    scrollbar-width: thin;
+}
+
+html::-webkit-scrollbar,
+body::-webkit-scrollbar{
+    width: 10px;
+}
+
+html::-webkit-scrollbar-track,
+body::-webkit-scrollbar-track{
+    background: var(--chat-scrollbar-track);
+}
+
+html::-webkit-scrollbar-thumb,
+body::-webkit-scrollbar-thumb{
+    background: var(--chat-scrollbar-thumb);
+    border-radius: 999px;
+    border: 2px solid var(--chat-scrollbar-track);
+}
+
+html::-webkit-scrollbar-thumb:hover,
+body::-webkit-scrollbar-thumb:hover{
+    background: var(--chat-scrollbar-thumb-hover);
 }
 
 body:not(.hide-header){
@@ -65,8 +98,13 @@ body.hide-header .header{
 .navbar{
     display: flex;
     align-items: center;
-    justify-content: space-between;
+    justify-content: flex-end;
     padding: 1rem 2rem;
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 100%;
+    z-index: 1200;
 }
 
 .navbar__logo{
@@ -133,6 +171,11 @@ body.hide-header .header{
     transform: scale(0.1, 0.9);
     transform-origin: left center;
     animation: blink-cursor 1s steps(1, end) infinite;
+}
+
+.header__cursor--paused{
+    animation: none;
+    opacity: 0;
 }
 
 @keyframes blink-cursor {
@@ -208,6 +251,7 @@ body.hide-header .header{
 body:not(.hide-header) .prompt{
     top: calc(45% - 3.2rem);
     bottom: auto;
+    animation: prompt-rise-in 1.0s cubic-bezier(0.22, 1, 0.36, 1) both;
 }
 
 body.hide-header .prompt{
@@ -289,11 +333,41 @@ body.hide-header .prompt{
     margin-top: 1rem;
 }
 
+@keyframes prompt-rise-in {
+    from{
+        opacity: 0;
+        transform: translateY(100vh);
+    }
+    to{
+        opacity: 1;
+        transform: translateY(0);
+    }
+}
+
 .chats{
     padding: 2rem 1rem 10rem;
-    max-height: 100%;
+    height: 100vh;
     overflow-y: auto;
-    scrollbar-color: #999 transparent;
+    scrollbar-color: var(--chat-scrollbar-thumb) var(--chat-scrollbar-track);
+    scrollbar-width: thin;
+}
+
+.chats::-webkit-scrollbar{
+    width: 10px;
+}
+
+.chats::-webkit-scrollbar-track{
+    background: var(--chat-scrollbar-track);
+}
+
+.chats::-webkit-scrollbar-thumb{
+    background: var(--chat-scrollbar-thumb);
+    border-radius: 999px;
+    border: 2px solid var(--chat-scrollbar-track);
+}
+
+.chats::-webkit-scrollbar-thumb:hover{
+    background: var(--chat-scrollbar-thumb-hover);
 }
 
 .chats .message--incoming{
@@ -314,7 +388,7 @@ body.hide-header .prompt{
 .chats .message__text{
     color: var(--text-color);
     white-space: pre-wrap;
-    margin-top: 10px;
+    margin-top: 4px;
 }
 
 .hide{
@@ -383,10 +457,30 @@ body.hide-header .prompt{
 .chats .message__loading-indicator .message__loading-bar{
     height: 1rem;
     width: 100%;
-    border-radius: 0.135rem;
-    background-position: -800px 0;
-    background: linear-gradient(to right, #2563eb60 30%, var(--primary-color) 60%, #2563eb60);
-    animation: loading 3s linear infinite;
+    border-radius: 999px;
+    background: linear-gradient(
+        90deg,
+        rgba(37, 99, 235, 0.03) 0%,
+        rgba(37, 99, 235, 0.58) 14%,
+        rgba(168, 85, 247, 0.2) 30%,
+        rgba(249, 115, 22, 0.62) 46%,
+        rgba(236, 72, 153, 0.68) 58%,
+        rgba(124, 58, 237, 0.22) 72%,
+        rgba(59, 130, 246, 0.6) 88%,
+        rgba(37, 99, 235, 0.03) 100%
+    );
+    background-size: 300% 100%;
+    animation: loading-gradient 2.3s ease-in-out infinite;
+}
+
+.chats .message__loading-indicator .message__loading-bar:nth-child(2){
+    animation-delay: 0.28s;
+    animation-duration: 2.15s;
+}
+
+.chats .message__loading-indicator .message__loading-bar:nth-child(3){
+    animation-delay: 0.56s;
+    animation-duration: 2.45s;
 }
 
 .chats .message__loading-indicator .message__loading-bar:first-child{
@@ -397,18 +491,16 @@ body.hide-header .prompt{
     width: 70%;
 }
 
-@keyframes loading {
-    
+@keyframes loading-gradient {
     0%{
-        background-position: -800px 0;
+        background-position: 0% 50%;
     }
     50%{
-        background-position: 0px 0;
+        background-position: 100% 50%;
     }
     100%{
-        background-position: 800px 0;
+        background-position: 0% 50%;
     }
-
 }
 
 .code__copy-btn{
