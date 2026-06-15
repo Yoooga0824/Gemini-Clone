@@ -66,9 +66,11 @@ const adjustPromptInputHeight = () => {
     Math.max(promptInput.scrollHeight, PROMPT_INPUT_MIN_HEIGHT),
     PROMPT_INPUT_MAX_HEIGHT
   );
+  const isExpanded = nextHeight > PROMPT_INPUT_MIN_HEIGHT + 2;
   promptInput.style.height = `${nextHeight}px`;
   promptInput.style.overflowY =
     promptInput.scrollHeight > PROMPT_INPUT_MAX_HEIGHT ? "auto" : "hidden";
+  promptInput.classList.toggle("prompt__form-input--expanded", isExpanded);
   const shouldLiftHeader = !document.body.classList.contains("hide-header");
   const headerLiftOffset = shouldLiftHeader
     ? Math.max(0, Math.round((nextHeight - PROMPT_INPUT_MIN_HEIGHT) * 0.9))

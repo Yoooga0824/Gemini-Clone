@@ -279,7 +279,11 @@ body.hide-header .prompt{
     border-radius: 100px;
     background: var(--secondary-color);
     overflow-y: auto;
-    transition: background 0.3s ease;
+    transition: background 0.3s ease, border-radius 0.2s ease;
+}
+
+.prompt__form-input.prompt__form-input--expanded{
+    border-radius: 1.35rem;
 }
 
 .prompt__form-input:focus{
