@@ -835,8 +835,7 @@ body.sidebar-collapsed .sidebar__brand:hover .sidebar__brand-logo{
 }
 
 body.sidebar-collapsed .sidebar__collapse-btn{
-    opacity: 0;
-    pointer-events: none;
+    display: none;
 }
 
 body.sidebar-collapsed .sidebar__brand:hover .sidebar__expand-btn{
