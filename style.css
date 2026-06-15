@@ -252,10 +252,6 @@ body.hide-header .prompt{
     transform: translateY(-50%) scale(1);
 }
 
-.prompt__form-input:valid ~ #deleteButton{
-    right: 3.5rem;
-}
-
 .prompt__disclaim{
     text-align: center;
     color: var(--placeholder-color);

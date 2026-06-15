@@ -2,7 +2,6 @@ const messageForm = document.querySelector(".prompt__form");
 const chatHistoryContainer = document.querySelector(".chats");
 
 const themeToggleButton = document.getElementById("themeToggler");
-const clearChatButton = document.getElementById("deleteButton");
 
 // State variables
 let currentUserMessage = null;
@@ -307,19 +306,6 @@ themeToggleButton.addEventListener("click", () => {
   // Update icon based on theme
   const newIconClass = isLightTheme ? "bx bx-moon" : "bx bx-sun";
   themeToggleButton.querySelector("i").className = newIconClass;
-});
-
-// Clear all chat history
-clearChatButton.addEventListener("click", () => {
-  if (confirm("Are you sure you want to delete all chat history?")) {
-    localStorage.removeItem("saved-api-chats");
-
-    // Reload chat history to reflect changes
-    loadSavedChatHistory();
-
-    currentUserMessage = null;
-    isGeneratingResponse = false;
-  }
 });
 
 // Prevent default from submission and handle outgoing message
