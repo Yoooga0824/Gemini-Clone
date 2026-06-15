@@ -94,7 +94,7 @@ body.hide-header .header{
 
 .header{
     position: fixed;
-    top: 36%;
+    top: 34%;
     left: 50%;
     transform: translate(-50%, -50%);
     width: 100%;
@@ -177,9 +177,8 @@ body.hide-header .header{
 }
 
 
-/* 输入框距离 */
 body:not(.hide-header) .prompt{
-    top: 45%;
+    top: 48%;
     bottom: auto;
     transform: translateY(-50%);
 }
@@ -485,7 +484,7 @@ blockquote{
     }
 
     body:not(.hide-header) .prompt{
-        top: 47%;
+        top: 50%;
     }
 
     .message{

@@ -1,6 +1,5 @@
 const messageForm = document.querySelector(".prompt__form");
 const chatHistoryContainer = document.querySelector(".chats");
-const suggestionItems = document.querySelectorAll(".suggests__item");
 
 const themeToggleButton = document.getElementById("themeToggler");
 const clearChatButton = document.getElementById("deleteButton");
@@ -321,16 +320,6 @@ clearChatButton.addEventListener("click", () => {
     currentUserMessage = null;
     isGeneratingResponse = false;
   }
-});
-
-// Handle click on suggestion items
-suggestionItems.forEach((suggestion) => {
-  suggestion.addEventListener("click", () => {
-    currentUserMessage = suggestion.querySelector(
-      ".suggests__item-text"
-    ).innerText;
-    handleOutgoingMessage();
-  });
 });
 
 // Prevent default from submission and handle outgoing message
