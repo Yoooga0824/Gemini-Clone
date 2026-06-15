@@ -412,14 +412,12 @@ const consumeAssistantEventStream = async (
   let visibleContent = "";
   let visibleReasoning = "";
   let renderedContent = "";
-  let renderedReasoning = "";
+  let provisionalReasoningFromContent = "";
   let thinkMode = false;
   let pendingTagPrefix = "";
   let streamStarted = false;
   let streamCompleted = false;
-  let reasoningTypewriterTimer = null;
   let contentTypewriterTimer = null;
-  const REASONING_TYPEWRITER_DELAY_MS = 16;
   const CONTENT_TYPEWRITER_DELAY_MS = 16;
 
   const stripReasoningOverlap = (contentText, reasoningText) => {
@@ -466,14 +464,13 @@ const consumeAssistantEventStream = async (
     if (!hasReasoning) return contentForDisplay || "";
 
     // Two-phase streaming: reasoning first, then content.
-    // Content starts only after reasoning typewriter has fully caught up.
-    if (renderedReasoning !== (visibleReasoning || "")) return "";
+    // Content starts only after reasoning stream is complete.
     return contentForDisplay || "";
   };
 
   const renderCurrentFrame = () => {
     messageElement.innerHTML = marked.parse(renderedContent || "");
-    renderReasoningPanel(incomingMessageElement, renderedReasoning, {
+    renderReasoningPanel(incomingMessageElement, visibleReasoning, {
       collapseByDefault: false,
     });
     scrollChatsToBottom("auto");
@@ -519,51 +516,8 @@ const consumeAssistantEventStream = async (
     }, CONTENT_TYPEWRITER_DELAY_MS);
   };
 
-  const syncReasoningTypewriter = () => {
-    const targetReasoning = visibleReasoning || "";
-
-    if (
-      renderedReasoning.length > targetReasoning.length ||
-      !targetReasoning.startsWith(renderedReasoning)
-    ) {
-      renderedReasoning = targetReasoning;
-      renderCurrentFrame();
-      return;
-    }
-
-    if (renderedReasoning === targetReasoning) return;
-    if (reasoningTypewriterTimer) return;
-
-    reasoningTypewriterTimer = setInterval(() => {
-      const latestTarget = visibleReasoning || "";
-      if (
-        renderedReasoning.length > latestTarget.length ||
-        !latestTarget.startsWith(renderedReasoning)
-      ) {
-        renderedReasoning = latestTarget;
-        clearInterval(reasoningTypewriterTimer);
-        reasoningTypewriterTimer = null;
-        renderCurrentFrame();
-        return;
-      }
-
-      if (renderedReasoning.length < latestTarget.length) {
-        renderedReasoning += latestTarget.charAt(renderedReasoning.length);
-        renderCurrentFrame();
-        syncContentTypewriter();
-      }
-
-      if (renderedReasoning.length >= latestTarget.length) {
-        clearInterval(reasoningTypewriterTimer);
-        reasoningTypewriterTimer = null;
-        syncContentTypewriter();
-      }
-    }, REASONING_TYPEWRITER_DELAY_MS);
-  };
-
   const applyRender = () => {
     renderCurrentFrame();
-    syncReasoningTypewriter();
     syncContentTypewriter();
   };
 
@@ -671,22 +625,46 @@ const consumeAssistantEventStream = async (
           thinkMode = false;
           pendingTagPrefix = "";
         } else {
-          if (
+          const hasExplicitReasoningDelta =
             ENABLE_REASONING_OUTPUT &&
             typeof eventData.reasoning_content === "string" &&
-            eventData.reasoning_content
+            !!eventData.reasoning_content;
+
+          if (
+            hasExplicitReasoningDelta
           ) {
             visibleReasoning += eventData.reasoning_content;
           }
+
           if (typeof eventData.content === "string" && eventData.content) {
-            const overlappedWithReasoning = shouldTreatDeltaContentAsReasoning(
-              eventData.content,
-              typeof eventData.reasoning_content === "string"
-                ? eventData.reasoning_content
-                : ""
-            );
-            if (!overlappedWithReasoning) {
-              routeMixedDelta(eventData.content);
+            const contentChunk = eventData.content;
+            const loweredChunk = contentChunk.toLowerCase();
+            const chunkIncludesThinkTag =
+              loweredChunk.includes("<think") || loweredChunk.includes("</think");
+            const shouldUseProvisionalReasoning =
+              ENABLE_REASONING_OUTPUT &&
+              !hasExplicitReasoningDelta &&
+              !thinkMode &&
+              !pendingTagPrefix &&
+              !chunkIncludesThinkTag;
+            let handledAsProvisionalReasoning = false;
+
+            if (shouldUseProvisionalReasoning) {
+              provisionalReasoningFromContent += contentChunk;
+              visibleReasoning = provisionalReasoningFromContent;
+              handledAsProvisionalReasoning = true;
+            }
+
+            if (!handledAsProvisionalReasoning) {
+              const overlappedWithReasoning = shouldTreatDeltaContentAsReasoning(
+                contentChunk,
+                typeof eventData.reasoning_content === "string"
+                  ? eventData.reasoning_content
+                  : ""
+              );
+              if (!overlappedWithReasoning) {
+                routeMixedDelta(contentChunk);
+              }
             }
           }
         }
@@ -703,10 +681,6 @@ const consumeAssistantEventStream = async (
   }
 
   incomingMessageElement.classList.remove("message--loading");
-  if (reasoningTypewriterTimer) {
-    clearInterval(reasoningTypewriterTimer);
-    reasoningTypewriterTimer = null;
-  }
   if (contentTypewriterTimer) {
     clearInterval(contentTypewriterTimer);
     contentTypewriterTimer = null;
