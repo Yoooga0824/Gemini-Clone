@@ -2,6 +2,13 @@ const messageForm = document.querySelector(".prompt__form");
 const chatHistoryContainer = document.querySelector(".chats");
 
 const themeToggleButton = document.getElementById("themeToggler");
+const sidebarElement = document.getElementById("appSidebar");
+const sidebarBackdrop = document.getElementById("sidebarBackdrop");
+const sidebarMobileToggleButton = document.getElementById("sidebarMobileToggle");
+const sidebarCollapseButton = document.getElementById("sidebarCollapseButton");
+const sidebarExpandButton = document.getElementById("sidebarExpandButton");
+const newChatButton = document.getElementById("newChatButton");
+const sidebarHistory = document.getElementById("sidebarHistory");
 const voiceInputButton = document.getElementById("voiceButton");
 const attachButton = document.getElementById("attachButton");
 const attachMenu = document.getElementById("attachMenu");
@@ -12,6 +19,8 @@ const attachmentList = document.getElementById("attachmentList");
 let currentUserMessage = null;
 let isGeneratingResponse = false;
 let pendingAttachments = [];
+let chatSessions = [];
+let activeSessionId = null;
 
 const MAX_ATTACHMENT_COUNT = 6;
 const MAX_ATTACHMENT_SIZE = 5 * 1024 * 1024;
@@ -42,6 +51,7 @@ const THINK_TAG_PATTERN = /<think>\s*([\s\S]*?)\s*<\/think>/gi;
 const ENABLE_REASONING_OUTPUT = true;
 const REASONING_SCROLL_FOLLOW_THRESHOLD = 20;
 const SHORT_CODE_BLOCK_MAX_CHARS = 72;
+const MOBILE_BREAKPOINT = 980;
 let shikiHighlighterPromise = null;
 
 const SHIKI_LANGUAGES = [
@@ -539,15 +549,151 @@ const setHeaderCursorPaused = (paused) => {
   headerCursor.classList.toggle("header__cursor--paused", paused);
 };
 
+const isMobileViewport = () => window.matchMedia(`(max-width: ${MOBILE_BREAKPOINT}px)`).matches;
+
+const closeSidebarDrawer = () => {
+  document.body.classList.remove("sidebar-drawer-open");
+};
+
+const openSidebarDrawer = () => {
+  if (!isMobileViewport()) return;
+  document.body.classList.add("sidebar-drawer-open");
+};
+
+const setSidebarCollapsed = (collapsed) => {
+  if (isMobileViewport()) return;
+  document.body.classList.toggle("sidebar-collapsed", collapsed);
+  sidebarElement?.classList.toggle("app-sidebar--collapsed", collapsed);
+  localStorage.setItem("sidebarCollapsed", collapsed ? "true" : "false");
+};
+
+const getSessionTitleFromText = (text = "") => {
+  const normalized = text.replace(/\s+/g, " ").trim();
+  if (!normalized) return "新聊天";
+  return normalized.length > 18 ? `${normalized.slice(0, 18)}...` : normalized;
+};
+
+const renderSidebarSessions = () => {
+  if (!sidebarHistory) return;
+  sidebarHistory.innerHTML = chatSessions
+    .map(
+      (session) => `
+        <button
+          type="button"
+          class="sidebar__session ${session.id === activeSessionId ? "is-active" : ""}"
+          data-session-id="${session.id}"
+          title="${escapeHtml(session.title)}"
+        >
+          <i class="bx bx-message-rounded-dots sidebar__session-icon"></i>
+          <span class="sidebar__session-title">${escapeHtml(session.title)}</span>
+        </button>
+      `
+    )
+    .join("");
+};
+
+const setActiveSession = (sessionId) => {
+  if (!sessionId) return;
+  activeSessionId = sessionId;
+  renderSidebarSessions();
+};
+
+const createSession = (title = "新聊天") => ({
+  id: `session-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`,
+  title,
+});
+
+const updateActiveSessionTitle = (nextTitle) => {
+  if (!activeSessionId || !nextTitle) return;
+  chatSessions = chatSessions.map((session) =>
+    session.id === activeSessionId ? { ...session, title: nextTitle } : session
+  );
+  renderSidebarSessions();
+};
+
+const resetChatCanvas = () => {
+  chatHistoryContainer.innerHTML = "";
+  document.body.classList.remove("hide-header");
+  shouldAutoScroll = true;
+  isGeneratingResponse = false;
+  pendingAttachments = [];
+  renderPendingAttachments();
+  messageForm.reset();
+  if (fileInput) fileInput.value = "";
+  adjustPromptInputHeight();
+};
+
+const handleCreateNewChat = () => {
+  if (isGeneratingResponse) return;
+  const newSession = createSession("新聊天");
+  chatSessions = [newSession, ...chatSessions];
+  setActiveSession(newSession.id);
+  resetChatCanvas();
+  if (isMobileViewport()) closeSidebarDrawer();
+};
+
+const bindSidebarEvents = () => {
+  sidebarMobileToggleButton?.addEventListener("click", () => {
+    if (isMobileViewport()) {
+      openSidebarDrawer();
+      return;
+    }
+    setSidebarCollapsed(!document.body.classList.contains("sidebar-collapsed"));
+  });
+
+  sidebarExpandButton?.addEventListener("click", () => {
+    setSidebarCollapsed(false);
+  });
+
+  sidebarCollapseButton?.addEventListener("click", () => {
+    setSidebarCollapsed(true);
+  });
+
+  sidebarBackdrop?.addEventListener("click", () => {
+    closeSidebarDrawer();
+  });
+
+  newChatButton?.addEventListener("click", () => {
+    handleCreateNewChat();
+  });
+
+  sidebarHistory?.addEventListener("click", (event) => {
+    const sessionButton = event.target.closest("[data-session-id]");
+    if (!sessionButton) return;
+    const { sessionId } = sessionButton.dataset;
+    if (!sessionId) return;
+    setActiveSession(sessionId);
+    if (isMobileViewport()) closeSidebarDrawer();
+  });
+
+  window.addEventListener("keydown", (event) => {
+    if (event.key !== "Escape") return;
+    closeSidebarDrawer();
+  });
+
+  window.addEventListener("resize", () => {
+    if (!isMobileViewport()) {
+      closeSidebarDrawer();
+    }
+  });
+};
+
 // Load saved data from local storage
 const loadSavedChatHistory = () => {
   localStorage.removeItem("saved-api-chats");
   const isLightTheme = localStorage.getItem("themeColor") === "light_mode";
+  const isSidebarCollapsed = localStorage.getItem("sidebarCollapsed") === "true";
 
   themeRoot.classList.toggle("light_mode", isLightTheme);
   themeToggleButton.innerHTML = isLightTheme
     ? '<i class="bx bx-moon"></i>'
     : '<i class="bx bx-sun"></i>';
+
+  chatSessions = [createSession("新聊天")];
+  activeSessionId = chatSessions[0].id;
+  renderSidebarSessions();
+  setSidebarCollapsed(isSidebarCollapsed);
+  closeSidebarDrawer();
 
   chatHistoryContainer.innerHTML = "";
   document.body.classList.remove("hide-header");
@@ -1091,11 +1237,18 @@ const handleOutgoingMessage = async () => {
 
   isGeneratingResponse = true;
   shouldAutoScroll = true;
+  closeSidebarDrawer();
 
   const activeAttachments = [...pendingAttachments];
   const outgoingText =
     inputText ||
     `已添加附件：${activeAttachments.map((file) => file.name).join("，")}`;
+  if (!activeSessionId) {
+    const session = createSession();
+    chatSessions = [session, ...chatSessions];
+    setActiveSession(session.id);
+  }
+  updateActiveSessionTitle(getSessionTitleFromText(outgoingText));
   currentUserMessage = await buildMessageWithAttachments(inputText, activeAttachments);
 
   const outgoingMessageHtml = `
@@ -1331,5 +1484,6 @@ messageForm.addEventListener("submit", (e) => {
 
 // Load saved chat history on page load
 playHeaderTypingAnimation();
+bindSidebarEvents();
 loadSavedChatHistory();
 adjustPromptInputHeight();

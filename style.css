@@ -33,6 +33,11 @@
     --chat-scrollbar-track: #000000;
     --prompt-expand-shift: 0px;
     --prompt-prechat-transform: translateY(calc(-54vh + 3.2rem));
+    --sidebar-expanded-width: 260px;
+    --sidebar-collapsed-width: 60px;
+    --sidebar-current-width: var(--sidebar-expanded-width);
+    --sidebar-bg: #17181a;
+    --sidebar-border: rgba(255, 255, 255, 0.06);
 }
 
 .light_mode{
@@ -52,11 +57,21 @@
     --chat-scrollbar-thumb: #b6bec8;
     --chat-scrollbar-thumb-hover: #9fa8b2;
     --chat-scrollbar-track: #e5e9ef;
+    --sidebar-bg: #edf2f8;
+    --sidebar-border: rgba(30, 40, 60, 0.1);
 }
 
 html,
 body{
     background: var(--primary-color);
+}
+
+body{
+    --sidebar-current-width: var(--sidebar-expanded-width);
+}
+
+body.sidebar-collapsed{
+    --sidebar-current-width: var(--sidebar-collapsed-width);
 }
 
 input,
@@ -112,13 +127,14 @@ body.hide-header .header{
 .navbar{
     display: flex;
     align-items: center;
-    justify-content: flex-end;
+    justify-content: space-between;
     padding: 1rem 2rem;
     position: fixed;
     top: 0;
-    left: 0;
-    width: 100%;
+    left: var(--sidebar-current-width);
+    width: calc(100% - var(--sidebar-current-width));
     z-index: 1200;
+    transition: left 0.3s ease, width 0.3s ease;
 }
 
 .navbar__logo{
@@ -140,6 +156,10 @@ body.hide-header .header{
     transition: background 0.3s ease;
 }
 
+.navbar__button--menu{
+    display: none;
+}
+
 .navbar__button:hover{
     background: var(--secondary-hover-color);
 }
@@ -147,13 +167,13 @@ body.hide-header .header{
 .header{
     position: fixed;
     top: 34%;
-    left: 50%;
+    left: calc(50% + (var(--sidebar-current-width) / 2));
     transform: translate(-50%, calc(-50% - var(--prompt-expand-shift)));
-    width: 100%;
+    width: calc(100% - var(--sidebar-current-width));
     padding: 0 1rem;
     text-align: center;
     opacity: 1;
-    transition: opacity 0.35s ease, transform 0.45s ease;
+    transition: opacity 0.35s ease, transform 0.45s ease, width 0.3s ease, left 0.3s ease;
 }
 
 .header__title h1{
@@ -253,12 +273,12 @@ body.hide-header .header{
     position: fixed;
     background: var(--primary-color);
     z-index: 1000;
-    width: 100%;
-    left: 0;
+    width: calc(100% - var(--sidebar-current-width));
+    left: var(--sidebar-current-width);
     bottom: 0;
     padding: 1rem;
     transform: translateY(0);
-    transition: transform 0.55s cubic-bezier(0.22, 1, 0.36, 1);
+    transition: transform 0.55s cubic-bezier(0.22, 1, 0.36, 1), left 0.3s ease, width 0.3s ease;
     backface-visibility: hidden;
     will-change: transform;
 }
@@ -472,9 +492,263 @@ body.hide-header .prompt{
 .chats{
     padding: 2rem 1rem 10rem;
     height: 100vh;
+    margin-left: var(--sidebar-current-width);
+    width: calc(100% - var(--sidebar-current-width));
     overflow-y: auto;
     scrollbar-color: var(--chat-scrollbar-thumb) var(--chat-scrollbar-track);
     scrollbar-width: thin;
+    transition: margin-left 0.3s ease, width 0.3s ease;
+}
+
+.app-sidebar{
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: var(--sidebar-current-width);
+    height: 100vh;
+    padding: 0.75rem 0.62rem;
+    display: flex;
+    flex-direction: column;
+    gap: 0.75rem;
+    background: var(--sidebar-bg);
+    border-right: 1px solid var(--sidebar-border);
+    z-index: 1300;
+    transition: width 0.3s ease, transform 0.3s ease;
+}
+
+.app-sidebar__top,
+.app-sidebar__middle,
+.app-sidebar__bottom{
+    background: color-mix(in srgb, var(--secondary-color) 78%, transparent);
+    border: 1px solid color-mix(in srgb, var(--secondary-hover-color) 68%, transparent);
+    border-radius: 12px;
+}
+
+.app-sidebar__top{
+    padding: 0.52rem;
+    display: flex;
+    flex-direction: column;
+    gap: 0.52rem;
+}
+
+.sidebar__brand{
+    height: 42px;
+    border-radius: 10px;
+    display: flex;
+    align-items: center;
+    justify-content: flex-start;
+    padding: 0 0.42rem;
+    position: relative;
+    overflow: hidden;
+}
+
+.sidebar__brand-logo{
+    width: 32px;
+    height: 32px;
+    border-radius: 10px;
+    transition: opacity 0.25s ease;
+}
+
+.sidebar__expand-btn{
+    position: absolute;
+    inset: 0;
+    border: none;
+    background: transparent;
+    color: var(--text-color);
+    font-size: 1.1rem;
+    cursor: pointer;
+    opacity: 0;
+    pointer-events: none;
+    transition: opacity 0.25s ease, background 0.25s ease;
+}
+
+.sidebar__collapse-btn{
+    position: absolute;
+    right: 0.2rem;
+    top: 50%;
+    transform: translateY(-50%);
+    width: 30px;
+    height: 30px;
+    border: none;
+    border-radius: 8px;
+    background: transparent;
+    color: var(--text-secondary-color);
+    cursor: pointer;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    transition: background 0.25s ease, color 0.25s ease;
+}
+
+.sidebar__collapse-btn:hover{
+    background: var(--button-hover-color);
+    color: var(--text-color);
+}
+
+.sidebar__expand-btn:hover{
+    background: var(--button-hover-color);
+}
+
+.sidebar__new-chat-btn,
+.sidebar__settings-btn,
+.sidebar__user-card{
+    width: 100%;
+    min-height: 42px;
+    border: none;
+    border-radius: 10px;
+    display: inline-flex;
+    align-items: center;
+    gap: 0.62rem;
+    padding: 0 0.68rem;
+    background: transparent;
+    color: var(--text-color);
+    cursor: pointer;
+    text-align: left;
+    font-size: 0.92rem;
+    transition: background 0.25s ease;
+}
+
+.sidebar__new-chat-btn:hover,
+.sidebar__settings-btn:hover,
+.sidebar__user-card:hover{
+    background: var(--button-hover-color);
+}
+
+.sidebar__label{
+    white-space: nowrap;
+}
+
+.app-sidebar__middle{
+    flex: 1;
+    min-height: 0;
+    padding: 0.5rem;
+    display: flex;
+    flex-direction: column;
+    gap: 0.45rem;
+}
+
+.sidebar__section-title{
+    font-size: 0.72rem;
+    letter-spacing: 0.05em;
+    color: var(--placeholder-color);
+    padding: 0 0.2rem;
+}
+
+.sidebar__history{
+    flex: 1;
+    min-height: 0;
+    overflow-y: auto;
+    display: flex;
+    flex-direction: column;
+    gap: 0.32rem;
+    padding-right: 0.15rem;
+}
+
+.sidebar__history::-webkit-scrollbar{
+    width: 8px;
+}
+
+.sidebar__history::-webkit-scrollbar-thumb{
+    background: var(--chat-scrollbar-thumb);
+    border-radius: 999px;
+}
+
+.sidebar__session{
+    width: 100%;
+    border: none;
+    border-radius: 10px;
+    background: transparent;
+    color: var(--text-secondary-color);
+    display: inline-flex;
+    align-items: center;
+    gap: 0.52rem;
+    min-height: 40px;
+    padding: 0 0.62rem;
+    cursor: pointer;
+    transition: background 0.25s ease, color 0.25s ease;
+}
+
+.sidebar__session:hover{
+    background: var(--button-hover-color);
+    color: var(--text-color);
+}
+
+.sidebar__session.is-active{
+    background: color-mix(in srgb, #4a90e2 20%, var(--secondary-color));
+    color: #ffffff;
+}
+
+.sidebar__session-title{
+    text-align: left;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    font-size: 0.86rem;
+}
+
+.app-sidebar__bottom{
+    padding: 0.5rem;
+    display: flex;
+    flex-direction: column;
+    gap: 0.35rem;
+}
+
+.sidebar__user-avatar{
+    width: 28px;
+    height: 28px;
+    border-radius: 50%;
+    object-fit: cover;
+}
+
+.sidebar__backdrop{
+    position: fixed;
+    inset: 0;
+    border: none;
+    background: rgba(0, 0, 0, 0.42);
+    opacity: 0;
+    pointer-events: none;
+    transition: opacity 0.3s ease;
+    z-index: 1250;
+}
+
+body.sidebar-collapsed .app-sidebar{
+    width: var(--sidebar-collapsed-width);
+}
+
+body.sidebar-collapsed .sidebar__label,
+body.sidebar-collapsed .sidebar__section-title,
+body.sidebar-collapsed .sidebar__session-title{
+    opacity: 0;
+    width: 0;
+    overflow: hidden;
+    pointer-events: none;
+}
+
+body.sidebar-collapsed .sidebar__new-chat-btn,
+body.sidebar-collapsed .sidebar__settings-btn,
+body.sidebar-collapsed .sidebar__user-card,
+body.sidebar-collapsed .sidebar__session{
+    justify-content: center;
+    padding: 0;
+}
+
+body.sidebar-collapsed .sidebar__brand{
+    justify-content: center;
+    padding: 0;
+}
+
+body.sidebar-collapsed .sidebar__brand:hover .sidebar__brand-logo{
+    opacity: 0;
+}
+
+body.sidebar-collapsed .sidebar__collapse-btn{
+    opacity: 0;
+    pointer-events: none;
+}
+
+body.sidebar-collapsed .sidebar__brand:hover .sidebar__expand-btn{
+    opacity: 1;
+    pointer-events: auto;
 }
 
 .chats::-webkit-scrollbar{
@@ -965,6 +1239,49 @@ td{
 }
 
 @media screen and (max-width: 980px) {
+    body{
+        --sidebar-current-width: 0px !important;
+    }
+
+    .navbar{
+        left: 0;
+        width: 100%;
+        padding: 0.9rem 1rem;
+    }
+
+    .navbar__button--menu{
+        display: inline-flex;
+    }
+
+    .app-sidebar{
+        width: var(--sidebar-expanded-width);
+        transform: translateX(-100%);
+        box-shadow: 0 12px 40px rgba(0, 0, 0, 0.4);
+    }
+
+    body.sidebar-drawer-open .app-sidebar{
+        transform: translateX(0);
+    }
+
+    body.sidebar-drawer-open .sidebar__backdrop{
+        opacity: 1;
+        pointer-events: auto;
+    }
+
+    .chats{
+        margin-left: 0;
+        width: 100%;
+    }
+
+    .prompt{
+        left: 0;
+        width: 100%;
+    }
+
+    .header{
+        left: 50%;
+        width: 100%;
+    }
     
     .header{
         top: 30%;

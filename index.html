@@ -60,7 +60,62 @@
   </head>
 
   <body>
+    <aside class="app-sidebar" id="appSidebar" aria-label="侧边栏">
+      <div class="app-sidebar__top">
+        <div class="sidebar__brand" id="sidebarBrand">
+          <img class="sidebar__brand-logo" src="assets/YoooFind.png" alt="YoooFind logo" />
+          <button
+            type="button"
+            class="sidebar__collapse-btn"
+            id="sidebarCollapseButton"
+            title="折叠侧边栏"
+            aria-label="折叠侧边栏"
+          >
+            <i class="bx bx-chevrons-left"></i>
+          </button>
+          <button
+            type="button"
+            class="sidebar__expand-btn"
+            id="sidebarExpandButton"
+            title="展开侧边栏"
+            aria-label="展开侧边栏"
+          >
+            <i class="bx bx-chevrons-right"></i>
+          </button>
+        </div>
+        <button type="button" class="sidebar__new-chat-btn" id="newChatButton">
+          <i class="bx bx-edit-alt"></i>
+          <span class="sidebar__label">新建聊天</span>
+        </button>
+      </div>
+
+      <div class="app-sidebar__middle">
+        <div class="sidebar__section-title sidebar__label">历史会话</div>
+        <div class="sidebar__history" id="sidebarHistory">
+          <button type="button" class="sidebar__session is-active" data-session-id="session-1">
+            <i class="bx bx-message-rounded-dots sidebar__session-icon"></i>
+            <span class="sidebar__session-title">新聊天</span>
+          </button>
+        </div>
+      </div>
+
+      <div class="app-sidebar__bottom">
+        <button type="button" class="sidebar__user-card">
+          <img class="sidebar__user-avatar" src="assets/profile.png" alt="用户头像" />
+          <span class="sidebar__label">YoooUser</span>
+        </button>
+        <button type="button" class="sidebar__settings-btn">
+          <i class="bx bx-cog"></i>
+          <span class="sidebar__label">设置</span>
+        </button>
+      </div>
+    </aside>
+    <button type="button" class="sidebar__backdrop" id="sidebarBackdrop" aria-label="关闭侧边栏"></button>
+
     <nav class="navbar">
+      <button class="navbar__button navbar__button--menu" id="sidebarMobileToggle" type="button">
+        <i class="bx bx-menu"></i>
+      </button>
       <button class="navbar__button" id="themeToggler">
         <i class="bx bx-sun"></i>
       </button>
