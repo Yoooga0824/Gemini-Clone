@@ -130,7 +130,7 @@ body.hide-header .header{
     margin-left: 0.12em;
     color: #ff6b6b;
     -webkit-text-fill-color: #ff6b6b;
-    transform: scaleX(0.1);
+    transform: scale(0.1, 0.9);
     transform-origin: left center;
     animation: blink-cursor 1s steps(1, end) infinite;
 }
