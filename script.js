@@ -2,6 +2,7 @@ const messageForm = document.querySelector(".prompt__form");
 const chatHistoryContainer = document.querySelector(".chats");
 
 const themeToggleButton = document.getElementById("themeToggler");
+const voiceInputButton = document.getElementById("voiceButton");
 
 // State variables
 let currentUserMessage = null;
@@ -18,6 +19,7 @@ hljs.configure({
 hljs.highlightAll();
 
 const API_REQUEST_URL = `${config.API_BASE_URL}/models/${config.MODEL_NAME}:generateContent?key=${config.GEMINI_API_KEY}`;
+const promptInput = messageForm.querySelector(".prompt__form-input");
 
 // Load saved data from local storage
 const loadSavedChatHistory = () => {
@@ -306,6 +308,43 @@ themeToggleButton.addEventListener("click", () => {
   // Update icon based on theme
   const newIconClass = isLightTheme ? "bx bx-moon" : "bx bx-sun";
   themeToggleButton.querySelector("i").className = newIconClass;
+});
+
+// Voice input (Web Speech API)
+voiceInputButton.addEventListener("click", () => {
+  const SpeechRecognition =
+    window.SpeechRecognition || window.webkitSpeechRecognition;
+
+  if (!SpeechRecognition) {
+    alert("当前浏览器不支持语音输入，请使用最新版 Chrome 或 Edge。");
+    return;
+  }
+
+  const recognition = new SpeechRecognition();
+  recognition.lang = "zh-CN";
+  recognition.interimResults = false;
+  recognition.maxAlternatives = 1;
+
+  const icon = voiceInputButton.querySelector("i");
+  icon.className = "bx bx-loader-alt bx-spin";
+
+  recognition.onresult = (event) => {
+    const transcript = event.results?.[0]?.[0]?.transcript?.trim();
+    if (!transcript) return;
+    promptInput.value = transcript;
+    promptInput.dispatchEvent(new Event("input", { bubbles: true }));
+    promptInput.focus();
+  };
+
+  recognition.onerror = () => {
+    alert("语音识别失败，请再试一次。");
+  };
+
+  recognition.onend = () => {
+    icon.className = "bx bx-microphone";
+  };
+
+  recognition.start();
 });
 
 // Prevent default from submission and handle outgoing message

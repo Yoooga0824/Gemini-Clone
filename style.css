@@ -110,7 +110,7 @@ body.hide-header .header{
     background: linear-gradient(to right, #4a90e2, #a355b9, #ff6b6b);
     background-clip: text;
     -webkit-background-clip: text;
-    text-fill-color: transparent;
+    color: transparent;
     -webkit-text-fill-color: transparent;
     font-size: 3.25rem;
     font-weight: 600;
@@ -250,6 +250,10 @@ body.hide-header .prompt{
 
 .prompt__form-input:valid ~ .prompt__form-button#sendButton{
     transform: translateY(-50%) scale(1);
+}
+
+.prompt__form-input:valid ~ #voiceButton{
+    right: 3.5rem;
 }
 
 .prompt__disclaim{
