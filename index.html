@@ -79,6 +79,40 @@
     <section class="prompt">
       <form action="#" class="prompt__form" novalidate>
         <div class="prompt__input-wrapper">
+          <button
+            class="prompt__form-button prompt__form-button--attach"
+            id="attachButton"
+            type="button"
+            aria-label="上传文件"
+            title="上传文件和图片"
+          >
+            <i class="bx bx-plus"></i>
+          </button>
+          <div class="prompt__attach-menu hide" id="attachMenu">
+            <button
+              type="button"
+              class="prompt__attach-option"
+              data-attach-mode="image"
+            >
+              <i class="bx bx-image-add"></i>
+              上传图片
+            </button>
+            <button
+              type="button"
+              class="prompt__attach-option"
+              data-attach-mode="file"
+            >
+              <i class="bx bx-file"></i>
+              上传文件
+            </button>
+          </div>
+          <input
+            id="fileInput"
+            class="prompt__file-input"
+            type="file"
+            multiple
+            accept="image/*,.txt,.md,.json,.csv,.js,.ts,.tsx,.go,.py,.java,.c,.cpp,.html,.css,.xml,.yaml,.yml,.pdf"
+          />
           <textarea
             placeholder="好久不见..."
             class="prompt__form-input"
@@ -99,6 +133,7 @@
           </button>
         </div>
       </form>
+      <div class="prompt__attachments" id="attachmentList"></div>
       <p class="prompt__disclaim">
         YoooFind 提供的信息可能存在错误，包括涉及个人的信息，请注意甄别并自行核实
       </p>

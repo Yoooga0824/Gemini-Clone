@@ -3,10 +3,22 @@ const chatHistoryContainer = document.querySelector(".chats");
 
 const themeToggleButton = document.getElementById("themeToggler");
 const voiceInputButton = document.getElementById("voiceButton");
+const attachButton = document.getElementById("attachButton");
+const attachMenu = document.getElementById("attachMenu");
+const fileInput = document.getElementById("fileInput");
+const attachmentList = document.getElementById("attachmentList");
 
 // State variables
 let currentUserMessage = null;
 let isGeneratingResponse = false;
+let pendingAttachments = [];
+
+const MAX_ATTACHMENT_COUNT = 6;
+const MAX_ATTACHMENT_SIZE = 5 * 1024 * 1024;
+const MAX_ATTACHMENT_TEXT_CHARS = 12000;
+const IMAGE_ACCEPT = "image/*";
+const FILE_ACCEPT =
+  ".txt,.md,.json,.csv,.js,.ts,.tsx,.go,.py,.java,.c,.cpp,.html,.css,.xml,.yaml,.yml,.pdf";
 
 import config from "./config.js";
 
@@ -31,6 +43,110 @@ let shouldAutoScroll = true;
 const pageScrollRoot = document.scrollingElement || document.documentElement;
 const THINK_TAG_PATTERN = /<think>\s*([\s\S]*?)\s*<\/think>/gi;
 const ENABLE_REASONING_OUTPUT = true;
+
+const formatBytes = (bytes = 0) => {
+  if (bytes < 1024) return `${bytes} B`;
+  if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KB`;
+  return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
+};
+
+const escapeHtml = (text = "") =>
+  text
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/"/g, "&quot;")
+    .replace(/'/g, "&#39;");
+
+const renderPendingAttachments = () => {
+  if (!attachmentList) return;
+  if (pendingAttachments.length === 0) {
+    attachmentList.innerHTML = "";
+    return;
+  }
+
+  attachmentList.innerHTML = pendingAttachments
+    .map(
+      (file, index) => `
+        <div class="prompt__attachment">
+          <span class="prompt__attachment-name" title="${escapeHtml(file.name)}">
+            ${escapeHtml(file.name)} · ${formatBytes(file.size)}
+          </span>
+          <button
+            type="button"
+            class="prompt__attachment-remove"
+            data-attachment-index="${index}"
+            aria-label="移除附件"
+            title="移除"
+          >
+            ×
+          </button>
+        </div>
+      `
+    )
+    .join("");
+};
+
+const isProbablyTextFile = (file) => {
+  const type = (file?.type || "").toLowerCase();
+  if (type.startsWith("text/")) return true;
+  if (
+    [
+      "application/json",
+      "application/javascript",
+      "application/xml",
+      "application/x-yaml",
+    ].includes(type)
+  ) {
+    return true;
+  }
+  const name = (file?.name || "").toLowerCase();
+  return /\.(txt|md|json|csv|js|ts|tsx|go|py|java|c|cpp|html|css|xml|ya?ml)$/i.test(
+    name
+  );
+};
+
+const readFileAsText = (file) =>
+  new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload = () => resolve(typeof reader.result === "string" ? reader.result : "");
+    reader.onerror = () => reject(new Error(`读取文件失败: ${file.name}`));
+    reader.readAsText(file);
+  });
+
+const buildMessageWithAttachments = async (messageText, attachments) => {
+  const baseText = (messageText || "").trim();
+  if (!attachments || attachments.length === 0) return baseText;
+
+  const attachmentSections = [];
+  for (const file of attachments) {
+    if (file.type?.startsWith("image/")) {
+      attachmentSections.push(`- 图片: ${file.name} (${formatBytes(file.size)})`);
+      continue;
+    }
+
+    if (isProbablyTextFile(file)) {
+      try {
+        const fullText = await readFileAsText(file);
+        const clippedText = fullText.slice(0, MAX_ATTACHMENT_TEXT_CHARS);
+        const clippedSuffix = fullText.length > MAX_ATTACHMENT_TEXT_CHARS ? "\n...[内容已截断]" : "";
+        attachmentSections.push(
+          `- 文件: ${file.name} (${formatBytes(file.size)})\n\`\`\`\n${clippedText}${clippedSuffix}\n\`\`\``
+        );
+      } catch {
+        attachmentSections.push(`- 文件: ${file.name} (${formatBytes(file.size)}) [读取失败]`);
+      }
+      continue;
+    }
+
+    attachmentSections.push(
+      `- 文件: ${file.name} (${formatBytes(file.size)}) [二进制文件，未内联内容]`
+    );
+  }
+
+  const prefix = baseText || "请结合以下附件信息进行回答：";
+  return `${prefix}\n\n[附件]\n${attachmentSections.join("\n")}`.trim();
+};
 
 const getActiveScrollElement = () => {
   const canScrollInChats =
@@ -145,6 +261,14 @@ const initReasoningPanelToggle = (incomingMessageElement) => {
   reasoningPanel.dataset.bound = "true";
   reasoningPanel.addEventListener("click", () => {
     if (reasoningPanel.dataset.collapsible !== "true") return;
+    const selection = window.getSelection();
+    const hasSelectedReasoningText =
+      !!selection &&
+      !selection.isCollapsed &&
+      reasoningPanel.contains(selection.anchorNode) &&
+      reasoningPanel.contains(selection.focusNode) &&
+      !!selection.toString().trim();
+    if (hasSelectedReasoningText) return;
     const collapsed = reasoningPanel.classList.toggle("message__reasoning--collapsed");
     reasoningPanel.dataset.expanded = collapsed ? "false" : "true";
     scrollChatsToBottom("smooth");
@@ -779,14 +903,18 @@ const copyMessageToClipboard = (copyButton) => {
 };
 
 // Handle sending chat messages
-const handleOutgoingMessage = () => {
-  currentUserMessage =
-    messageForm.querySelector(".prompt__form-input").value.trim() ||
-    currentUserMessage;
-  if (!currentUserMessage || isGeneratingResponse) return; // Exit if no message or already generating response
+const handleOutgoingMessage = async () => {
+  const inputText = messageForm.querySelector(".prompt__form-input").value.trim();
+  if ((inputText === "" && pendingAttachments.length === 0) || isGeneratingResponse) return;
 
   isGeneratingResponse = true;
   shouldAutoScroll = true;
+
+  const activeAttachments = [...pendingAttachments];
+  const outgoingText =
+    inputText ||
+    `已添加附件：${activeAttachments.map((file) => file.name).join("，")}`;
+  currentUserMessage = await buildMessageWithAttachments(inputText, activeAttachments);
 
   const outgoingMessageHtml = `
 
@@ -802,11 +930,14 @@ const handleOutgoingMessage = () => {
     "message--outgoing"
   );
   outgoingMessageElement.querySelector(".message__text").innerText =
-    currentUserMessage;
+    outgoingText;
   chatHistoryContainer.appendChild(outgoingMessageElement);
   scrollChatsToBottom("smooth");
 
   messageForm.reset(); // Clear input field
+  pendingAttachments = [];
+  renderPendingAttachments();
+  if (fileInput) fileInput.value = "";
   adjustPromptInputHeight();
   themeRoot.style.setProperty("--prompt-expand-shift", "0px");
   document.body.classList.add("hide-header");
@@ -853,7 +984,7 @@ const retryIncomingMessage = (buttonElement) => {
   promptInput.value = previousUserText;
   promptInput.dispatchEvent(new Event("input", { bubbles: true }));
   currentUserMessage = previousUserText;
-  handleOutgoingMessage();
+  void handleOutgoingMessage();
 };
 
 // Toggle between light and dark themes
@@ -903,6 +1034,67 @@ voiceInputButton.addEventListener("click", () => {
   recognition.start();
 });
 
+attachButton?.addEventListener("click", () => {
+  if (isGeneratingResponse) return;
+  attachMenu?.classList.toggle("hide");
+});
+
+attachMenu?.addEventListener("click", (event) => {
+  const option = event.target.closest("[data-attach-mode]");
+  if (!option || !fileInput) return;
+  const mode = option.dataset.attachMode;
+  fileInput.accept = mode === "image" ? IMAGE_ACCEPT : FILE_ACCEPT;
+  attachMenu.classList.add("hide");
+  fileInput.click();
+});
+
+fileInput?.addEventListener("change", (event) => {
+  const files = Array.from(event.target?.files || []);
+  if (files.length === 0) return;
+
+  const nextAttachments = [...pendingAttachments];
+  for (const file of files) {
+    if (nextAttachments.length >= MAX_ATTACHMENT_COUNT) {
+      alert(`最多可上传 ${MAX_ATTACHMENT_COUNT} 个附件`);
+      break;
+    }
+    if (file.size > MAX_ATTACHMENT_SIZE) {
+      alert(`"${file.name}" 超过 ${formatBytes(MAX_ATTACHMENT_SIZE)}，已跳过`);
+      continue;
+    }
+    const duplicated = nextAttachments.some(
+      (item) =>
+        item.name === file.name &&
+        item.size === file.size &&
+        item.lastModified === file.lastModified
+    );
+    if (duplicated) continue;
+    nextAttachments.push(file);
+  }
+
+  pendingAttachments = nextAttachments;
+  renderPendingAttachments();
+  fileInput.value = "";
+});
+
+document.addEventListener("click", (event) => {
+  if (!attachMenu || !attachButton) return;
+  const clickedInsideMenu = attachMenu.contains(event.target);
+  const clickedAttachButton = attachButton.contains(event.target);
+  if (!clickedInsideMenu && !clickedAttachButton) {
+    attachMenu.classList.add("hide");
+  }
+});
+
+attachmentList?.addEventListener("click", (event) => {
+  const removeButton = event.target.closest("[data-attachment-index]");
+  if (!removeButton) return;
+  const index = Number(removeButton.dataset.attachmentIndex);
+  if (Number.isNaN(index) || index < 0 || index >= pendingAttachments.length) return;
+  pendingAttachments.splice(index, 1);
+  renderPendingAttachments();
+});
+
 promptInput.addEventListener("focus", () => setHeaderCursorPaused(true));
 promptInput.addEventListener("blur", () => setHeaderCursorPaused(false));
 promptInput.addEventListener("input", adjustPromptInputHeight);
@@ -910,7 +1102,7 @@ promptInput.addEventListener("keydown", (e) => {
   if (e.key !== "Enter") return;
   if (e.shiftKey) return;
   e.preventDefault();
-  handleOutgoingMessage();
+  void handleOutgoingMessage();
 });
 chatHistoryContainer.addEventListener(
   "scroll",
@@ -947,7 +1139,7 @@ chatHistoryContainer.addEventListener("click", (event) => {
 // Prevent default from submission and handle outgoing message
 messageForm.addEventListener("submit", (e) => {
   e.preventDefault();
-  handleOutgoingMessage();
+  void handleOutgoingMessage();
 });
 
 // Load saved chat history on page load
