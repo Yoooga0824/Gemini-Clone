@@ -30,6 +30,7 @@ const SCROLL_FOLLOW_THRESHOLD = 80;
 let shouldAutoScroll = true;
 const pageScrollRoot = document.scrollingElement || document.documentElement;
 const THINK_TAG_PATTERN = /<think>\s*([\s\S]*?)\s*<\/think>/gi;
+const ENABLE_REASONING_OUTPUT = true;
 
 const getActiveScrollElement = () => {
   const canScrollInChats =
@@ -161,6 +162,13 @@ const renderReasoningPanel = (
     ".message__reasoning-text"
   );
   if (!reasoningPanel || !reasoningTextElement) return;
+  if (!ENABLE_REASONING_OUTPUT) {
+    reasoningPanel.classList.add("hide");
+    reasoningTextElement.innerHTML = "";
+    reasoningPanel.dataset.collapsible = "false";
+    reasoningPanel.dataset.expanded = "false";
+    return;
+  }
 
   initReasoningPanelToggle(incomingMessageElement);
 
@@ -191,6 +199,10 @@ const renderReasoningPanel = (
 const showReasoningLoading = (incomingMessageElement) => {
   const reasoningPanel = incomingMessageElement.querySelector(".message__reasoning");
   if (!reasoningPanel) return;
+  if (!ENABLE_REASONING_OUTPUT) {
+    reasoningPanel.classList.add("hide");
+    return;
+  }
   reasoningPanel.dataset.collapsible = "false";
   reasoningPanel.dataset.expanded = "false";
   reasoningPanel.classList.add("hide");
@@ -593,11 +605,15 @@ const consumeAssistantEventStream = async (
                 : visibleReasoning,
           });
           visibleContent = finalParsed.content || "";
-          visibleReasoning = finalParsed.reasoning || "";
+          visibleReasoning = ENABLE_REASONING_OUTPUT ? finalParsed.reasoning || "" : "";
           thinkMode = false;
           pendingTagPrefix = "";
         } else {
-          if (typeof eventData.reasoning_content === "string" && eventData.reasoning_content) {
+          if (
+            ENABLE_REASONING_OUTPUT &&
+            typeof eventData.reasoning_content === "string" &&
+            eventData.reasoning_content
+          ) {
             visibleReasoning += eventData.reasoning_content;
           }
           if (typeof eventData.content === "string" && eventData.content) {
