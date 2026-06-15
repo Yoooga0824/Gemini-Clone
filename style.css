@@ -107,13 +107,41 @@ body.hide-header .header{
 .header__title h1{
     width: fit-content;
     margin: 0 auto;
+    font-size: 3.25rem;
+    font-weight: 600;
+}
+
+.header__typing-title{
+    display: inline-flex;
+    align-items: baseline;
+}
+
+.header__typing-text{
     background: linear-gradient(to right, #4a90e2, #a355b9, #ff6b6b);
     background-clip: text;
     -webkit-background-clip: text;
     color: transparent;
     -webkit-text-fill-color: transparent;
-    font-size: 3.25rem;
-    font-weight: 600;
+    white-space: nowrap;
+}
+
+.header__cursor{
+    display: inline-block;
+    margin-left: 0.12em;
+    color: #ff6b6b;
+    -webkit-text-fill-color: #ff6b6b;
+    transform: scaleX(0.1);
+    transform-origin: left center;
+    animation: blink-cursor 1s steps(1, end) infinite;
+}
+
+@keyframes blink-cursor {
+    0%, 49%{
+        opacity: 1;
+    }
+    50%, 100%{
+        opacity: 0;
+    }
 }
 
 .header__title h2{

@@ -20,6 +20,27 @@ hljs.highlightAll();
 
 const API_REQUEST_URL = config.BACKEND_API_URL;
 const promptInput = messageForm.querySelector(".prompt__form-input");
+const headerTypingTitle = document.querySelector(".header__typing-title");
+const headerTypingText = document.querySelector(".header__typing-text");
+
+// Play opening title typing animation on each refresh
+const playHeaderTypingAnimation = () => {
+  if (!headerTypingTitle || !headerTypingText) return;
+
+  const fullText =
+    headerTypingTitle.dataset.fullText || headerTypingText.textContent || "";
+  const characters = Array.from(fullText);
+  const totalDuration = 750;
+  const typingDelay = Math.max(totalDuration / Math.max(characters.length, 1), 1);
+
+  headerTypingText.textContent = "";
+
+  characters.forEach((char, index) => {
+    window.setTimeout(() => {
+      headerTypingText.textContent += char;
+    }, typingDelay * (index + 1));
+  });
+};
 
 // Load saved data from local storage
 const loadSavedChatHistory = () => {
@@ -352,4 +373,5 @@ messageForm.addEventListener("submit", (e) => {
 });
 
 // Load saved chat history on page load
+playHeaderTypingAnimation();
 loadSavedChatHistory();
