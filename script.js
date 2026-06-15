@@ -256,7 +256,12 @@ const loadSavedChatHistory = () => {
                     </div>
                 </div>
             </div>
-            <span onClick="copyMessageToClipboard(this)" class="message__icon hide"><i class='bx bx-copy-alt'></i></span>
+            <div class="message__actions hide">
+                <button type="button" class="message__action-btn" data-action="copy" title="复制"><i class='bx bx-copy-alt'></i></button>
+                <button type="button" class="message__action-btn" data-action="like" title="点赞"><i class='bx bx-like'></i></button>
+                <button type="button" class="message__action-btn" data-action="dislike" title="点踩"><i class='bx bx-dislike'></i></button>
+                <button type="button" class="message__action-btn" data-action="retry" title="重试"><i class='bx bx-refresh'></i></button>
+            </div>
 
         `;
 
@@ -301,9 +306,8 @@ const showTypingEffect = (
   skipEffect = false,
   reasoningText = ""
 ) => {
-  const copyIconElement =
-    incomingMessageElement.querySelector(".message__icon");
-  copyIconElement.classList.add("hide"); // Initially hide copy button
+  const actionsElement = incomingMessageElement.querySelector(".message__actions");
+  actionsElement?.classList.add("hide");
   renderReasoningPanel(incomingMessageElement, reasoningText);
 
   if (skipEffect) {
@@ -311,7 +315,7 @@ const showTypingEffect = (
     messageElement.innerHTML = htmlText;
     hljs.highlightAll();
     addCopyButtonToCodeBlocks();
-    copyIconElement.classList.remove("hide"); // Show copy button
+    actionsElement?.classList.remove("hide");
     isGeneratingResponse = false;
     scrollChatsToBottom("auto");
     return;
@@ -322,7 +326,7 @@ const showTypingEffect = (
     messageElement.innerHTML = htmlText;
     hljs.highlightAll();
     addCopyButtonToCodeBlocks();
-    copyIconElement.classList.remove("hide");
+    actionsElement?.classList.remove("hide");
     isGeneratingResponse = false;
     scrollChatsToBottom("auto");
     return;
@@ -341,7 +345,7 @@ const showTypingEffect = (
       messageElement.innerHTML = htmlText;
       hljs.highlightAll();
       addCopyButtonToCodeBlocks();
-      copyIconElement.classList.remove("hide");
+      actionsElement?.classList.remove("hide");
       scrollChatsToBottom("auto");
     }
   }, 25);
@@ -454,7 +458,12 @@ const displayLoadingAnimation = () => {
                 </div>
             </div>
         </div>
-        <span onClick="copyMessageToClipboard(this)" class="message__icon hide"><i class='bx bx-copy-alt'></i></span>
+        <div class="message__actions hide">
+            <button type="button" class="message__action-btn" data-action="copy" title="复制"><i class='bx bx-copy-alt'></i></button>
+            <button type="button" class="message__action-btn" data-action="like" title="点赞"><i class='bx bx-like'></i></button>
+            <button type="button" class="message__action-btn" data-action="dislike" title="点踩"><i class='bx bx-dislike'></i></button>
+            <button type="button" class="message__action-btn" data-action="retry" title="重试"><i class='bx bx-refresh'></i></button>
+        </div>
 
     `;
 
@@ -472,8 +481,9 @@ const displayLoadingAnimation = () => {
 
 // Copy message to clipboard
 const copyMessageToClipboard = (copyButton) => {
-  const messageContent =
-    copyButton.parentElement.querySelector(".message__text").innerText;
+  const messageRoot = copyButton.closest(".message");
+  const messageContent = messageRoot?.querySelector(".message__text")?.innerText || "";
+  if (!messageContent) return;
 
   navigator.clipboard.writeText(messageContent);
   copyButton.innerHTML = `<i class='bx bx-check'></i>`; // Confirmation icon
@@ -514,6 +524,49 @@ const handleOutgoingMessage = () => {
   messageForm.reset(); // Clear input field
   document.body.classList.add("hide-header");
   setTimeout(displayLoadingAnimation, 500); // Show loading animation after delay
+};
+
+const handleFeedbackAction = (buttonElement, actionType) => {
+  const messageElement = buttonElement.closest(".message");
+  if (!messageElement) return;
+
+  const likeButton = messageElement.querySelector('[data-action="like"]');
+  const dislikeButton = messageElement.querySelector('[data-action="dislike"]');
+  if (!likeButton || !dislikeButton) return;
+
+  const isLike = actionType === "like";
+  const activeButton = isLike ? likeButton : dislikeButton;
+  const inactiveButton = isLike ? dislikeButton : likeButton;
+  const isActivating = !activeButton.classList.contains("is-active");
+
+  likeButton.classList.remove("is-active");
+  dislikeButton.classList.remove("is-active");
+  if (isActivating) {
+    activeButton.classList.add("is-active");
+  }
+  inactiveButton.classList.remove("is-active");
+};
+
+const retryIncomingMessage = (buttonElement) => {
+  if (isGeneratingResponse) return;
+
+  const incomingMessage = buttonElement.closest(".message--incoming");
+  if (!incomingMessage) return;
+
+  let previousMessage = incomingMessage.previousElementSibling;
+  while (previousMessage && !previousMessage.classList.contains("message--outgoing")) {
+    previousMessage = previousMessage.previousElementSibling;
+  }
+
+  const previousUserText = previousMessage
+    ?.querySelector(".message__text")
+    ?.innerText?.trim();
+  if (!previousUserText) return;
+
+  promptInput.value = previousUserText;
+  promptInput.dispatchEvent(new Event("input", { bubbles: true }));
+  currentUserMessage = previousUserText;
+  handleOutgoingMessage();
 };
 
 // Toggle between light and dark themes
@@ -579,6 +632,23 @@ window.addEventListener(
   },
   { passive: true }
 );
+chatHistoryContainer.addEventListener("click", (event) => {
+  const actionButton = event.target.closest(".message__action-btn");
+  if (!actionButton) return;
+
+  const actionType = actionButton.dataset.action;
+  if (actionType === "copy") {
+    copyMessageToClipboard(actionButton);
+    return;
+  }
+  if (actionType === "like" || actionType === "dislike") {
+    handleFeedbackAction(actionButton, actionType);
+    return;
+  }
+  if (actionType === "retry") {
+    retryIncomingMessage(actionButton);
+  }
+});
 
 // Prevent default from submission and handle outgoing message
 messageForm.addEventListener("submit", (e) => {

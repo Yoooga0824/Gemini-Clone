@@ -243,19 +243,20 @@ body.hide-header .header{
     left: 0;
     bottom: 0;
     padding: 1rem;
-    transition: top 0.45s ease, bottom 0.45s ease;
+    transform: translateY(0);
+    transition: transform 0.55s cubic-bezier(0.22, 1, 0.36, 1);
 }
 
 
 body:not(.hide-header) .prompt{
-    top: calc(45% - 3.2rem);
-    bottom: auto;
+    top: auto;
+    bottom: 0;
+    transform: translateY(calc(-51vh + 3.2rem));
     animation: prompt-rise-in 1.0s cubic-bezier(0.22, 1, 0.36, 1) both;
 }
 
 body.hide-header .prompt{
-    top: auto;
-    bottom: 0;
+    transform: translateY(0);
 }
 
 .prompt__input-wrapper{
@@ -335,11 +336,9 @@ body.hide-header .prompt{
 @keyframes prompt-rise-in {
     from{
         opacity: 0;
-        transform: translateY(100vh);
     }
     to{
         opacity: 1;
-        transform: translateY(0);
     }
 }
 
@@ -535,7 +534,15 @@ body.hide-header .prompt{
 
 }
 
-.chats .message__icon{
+.chats .message__actions{
+    display: flex;
+    align-items: center;
+    gap: 0.4rem;
+    margin-left: 3.5rem;
+    margin-top: 0.35rem;
+}
+
+.chats .message__action-btn{
     color: var(--text-color);
     cursor: pointer;
     height: 35px;
@@ -544,14 +551,19 @@ body.hide-header .prompt{
     display: flex;
     align-items: center;
     justify-content: center;
+    border: none;
     background: none;
-    font-size: 1.25rem;
-    margin-left: 3.5rem;
-    transition: background 0.3s ease;
+    font-size: 1.2rem;
+    transition: background 0.25s ease, color 0.25s ease;
 }
 
-.chats .message__icon:hover{
+.chats .message__action-btn:hover{
     background: var(--secondary-hover-color);
+}
+
+.chats .message__action-btn.is-active{
+    color: #60a5fa;
+    background: rgba(59, 130, 246, 0.16);
 }
 
 .chats .message__loading-indicator{
@@ -725,7 +737,7 @@ blockquote{
     }
 
     body:not(.hide-header) .prompt{
-        top: calc(50% - 3.2rem);
+        transform: translateY(calc(-50vh + 3.2rem));
     }
 
     .message{
