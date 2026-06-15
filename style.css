@@ -44,6 +44,10 @@ body{
     background: var(--primary-color);
 }
 
+body:not(.hide-header){
+    overflow: hidden;
+}
+
 .header,
 .chats .message,
 .chats .message .message__content,
@@ -53,8 +57,9 @@ body{
 }
 
 body.hide-header .header{
-    margin: 0;
-    display: none;
+    opacity: 0;
+    transform: translate(-50%, -58%);
+    pointer-events: none;
 }
 
 .navbar{
@@ -88,11 +93,20 @@ body.hide-header .header{
 }
 
 .header{
-    margin-top: 6vh;
+    position: fixed;
+    top: 36%;
+    left: 50%;
+    transform: translate(-50%, -50%);
+    width: 100%;
+    padding: 0 1rem;
+    text-align: center;
+    opacity: 1;
+    transition: opacity 0.35s ease, transform 0.45s ease;
 }
 
 .header__title h1{
     width: fit-content;
+    margin: 0 auto;
     background: linear-gradient(to right, #4a90e2, #a355b9, #ff6b6b);
     background-clip: text;
     -webkit-background-clip: text;
@@ -104,8 +118,9 @@ body.hide-header .header{
 
 .header__title h2{
     color: var(--heading-secondary-color);
-    font-size: 3.25rem;
+    font-size: 1.35rem;
     font-weight: 600;
+    margin-top: 0.4rem;
 }
 
 .suggests{
@@ -158,6 +173,21 @@ body.hide-header .header{
     left: 0;
     bottom: 0;
     padding: 1rem;
+    transition: top 0.45s ease, bottom 0.45s ease, transform 0.45s ease;
+}
+
+
+/* 输入框距离 */
+body:not(.hide-header) .prompt{
+    top: 45%;
+    bottom: auto;
+    transform: translateY(-50%);
+}
+
+body.hide-header .prompt{
+    top: auto;
+    bottom: 0;
+    transform: translateY(0);
 }
 
 .prompt__input-wrapper{
@@ -442,6 +472,7 @@ blockquote{
 @media screen and (max-width: 980px) {
     
     .header{
+        top: 30%;
         padding: 0 2rem;
     }
 
@@ -453,17 +484,8 @@ blockquote{
         font-size: 2.7rem;
     }
 
-    .header__title h2{
-        font-size: 2.5rem;
-    }
-
-    .suggests{
-        justify-content: center;
-    }
-
-    .suggests__item:nth-child(3),
-    .suggests__item:nth-child(4){
-        display: none;
+    body:not(.hide-header) .prompt{
+        top: 47%;
     }
 
     .message{
