@@ -124,7 +124,7 @@ const loadSavedChatHistory = () => {
     const responseHtml = `
 
            <div class="message__content">
-                <img class="message__avatar" src="assets/gemini.svg" alt="Gemini avatar">
+                <img class="message__avatar" src="assets/YoooFind.png" alt="Gemini avatar">
                 <p class="message__text"></p>
                 <div class="message__loading-indicator hide">
                     <div class="message__loading-bar"></div>
@@ -189,14 +189,15 @@ const showTypingEffect = (
     return;
   }
 
-  const wordsArray = rawText.split(" ");
-  let wordIndex = 0;
+  const tokens = Array.from(rawText);
+  let tokenIndex = 0;
+  let streamedText = "";
 
   const typingInterval = setInterval(() => {
-    messageElement.innerText +=
-      (wordIndex === 0 ? "" : " ") + wordsArray[wordIndex++];
+    streamedText += tokens[tokenIndex++];
+    messageElement.innerHTML = marked.parse(streamedText);
     scrollChatsToBottom("auto");
-    if (wordIndex === wordsArray.length) {
+    if (tokenIndex === tokens.length) {
       clearInterval(typingInterval);
       isGeneratingResponse = false;
       messageElement.innerHTML = htmlText;
@@ -205,7 +206,7 @@ const showTypingEffect = (
       copyIconElement.classList.remove("hide");
       scrollChatsToBottom("auto");
     }
-  }, 75);
+  }, 25);
 };
 
 // Fetch API response based on user input
@@ -295,7 +296,7 @@ const displayLoadingAnimation = () => {
   const loadingHtml = `
 
         <div class="message__content">
-            <img class="message__avatar" src="assets/gemini.svg" alt="Gemini avatar">
+            <img class="message__avatar" src="assets/YoooFind.png" alt="Gemini avatar">
             <p class="message__text"></p>
             <div class="message__loading-indicator">
                 <div class="message__loading-bar"></div>

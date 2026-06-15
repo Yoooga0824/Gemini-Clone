@@ -83,7 +83,6 @@ body:not(.hide-header){
 
 .header,
 .chats .message,
-.chats .message .message__content,
 .prompt__form{
     margin: 0 auto;
     max-width: 824px;
@@ -376,6 +375,31 @@ body.hide-header .prompt{
 
 .chats .message--outgoing:not(:first-child){
     margin-top: 40px;
+}
+
+.chats .message--outgoing{
+    display: block;
+}
+
+.chats .message--outgoing .message__content{
+    justify-content: flex-end;
+    flex-direction: row-reverse;
+    width: fit-content;
+    max-width: 78%;
+    margin: 0 0 0 auto;
+    gap: 0.75rem;
+}
+
+.chats .message--outgoing .message__text{
+    text-align: right;
+    margin-top: 0;
+    padding: 0.75rem 1rem;
+    border-radius: 1rem;
+    max-width: 100%;
+    color: #ffffff;
+    background: linear-gradient(135deg, #3b82f6 0%, #8b5cf6 52%, #ec4899 100%);
+    box-shadow: 0 8px 20px rgba(59, 130, 246, 0.24);
+    word-break: break-word;
 }
 
 .chats .message__content{
