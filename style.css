@@ -536,8 +536,8 @@ body.hide-header .prompt{
 }
 
 .sidebar__brand{
-    width: var(--sidebar-icon-size);
-    height: var(--sidebar-icon-size);
+    width: var(--sidebar-action-size);
+    height: var(--sidebar-action-size);
     border-radius: 8px;
     display: flex;
     align-items: center;
@@ -723,10 +723,39 @@ body:not(.sidebar-collapsed) .sidebar__brand:hover .sidebar__collapse-btn{
 }
 
 .sidebar__user-avatar{
-    width: var(--sidebar-action-size);
-    height: var(--sidebar-action-size);
+    width: calc(var(--sidebar-action-size) * 0.6667);
+    height: calc(var(--sidebar-action-size) * 0.6667);
     border-radius: 50%;
     object-fit: cover;
+}
+
+.light_mode .app-sidebar{
+    background: #eef3f9;
+    box-shadow: inset -1px 0 0 rgba(30, 58, 95, 0.12);
+}
+
+.light_mode .sidebar__new-chat-btn,
+.light_mode .sidebar__settings-btn,
+.light_mode .sidebar__user-card,
+.light_mode .sidebar__session,
+.light_mode .sidebar__collapse-btn,
+.light_mode .sidebar__expand-btn{
+    color: #243244;
+}
+
+.light_mode .sidebar__new-chat-btn:hover,
+.light_mode .sidebar__settings-btn:hover,
+.light_mode .sidebar__user-card:hover,
+.light_mode .sidebar__session:hover,
+.light_mode .sidebar__collapse-btn:hover,
+.light_mode .sidebar__expand-btn:hover{
+    background: #dbe6f3;
+    color: #121a26;
+}
+
+.light_mode .sidebar__session.is-active{
+    background: #c8daf1;
+    color: #10233b;
 }
 
 .sidebar__backdrop{
