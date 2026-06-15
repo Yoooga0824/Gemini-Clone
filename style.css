@@ -173,20 +173,18 @@ body.hide-header .header{
     left: 0;
     bottom: 0;
     padding: 1rem;
-    transition: top 0.45s ease, bottom 0.45s ease, transform 0.45s ease;
+    transition: top 0.45s ease, bottom 0.45s ease;
 }
 
 
 body:not(.hide-header) .prompt{
-    top: 48%;
+    top: calc(48% - 3.2rem);
     bottom: auto;
-    transform: translateY(-50%);
 }
 
 body.hide-header .prompt{
     top: auto;
     bottom: 0;
-    transform: translateY(0);
 }
 
 .prompt__input-wrapper{
@@ -484,7 +482,7 @@ blockquote{
     }
 
     body:not(.hide-header) .prompt{
-        top: 50%;
+        top: calc(50% - 3.2rem);
     }
 
     .message{
