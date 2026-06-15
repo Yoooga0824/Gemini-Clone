@@ -211,6 +211,8 @@ func (c *OpenAICompatibleClient) StreamReply(
 
 	var fullContent strings.Builder
 	var fullReasoning strings.Builder
+	var emittedContentLen int
+	var emittedReasoningLen int
 
 	for scanner.Scan() {
 		line := strings.TrimSpace(scanner.Text())
@@ -255,10 +257,34 @@ func (c *OpenAICompatibleClient) StreamReply(
 			fullReasoning.WriteString(deltaReasoning)
 		}
 
-		if onDelta != nil && (deltaContent != "" || deltaReasoning != "") {
+		streamContent, streamReasoning := splitReasoningAndContent(
+			fullContent.String(),
+			fullReasoning.String(),
+		)
+
+		contentDeltaOut := ""
+		reasoningDeltaOut := ""
+
+		if len(streamContent) >= emittedContentLen {
+			contentDeltaOut = streamContent[emittedContentLen:]
+		} else {
+			contentDeltaOut = streamContent
+			emittedContentLen = 0
+		}
+		if len(streamReasoning) >= emittedReasoningLen {
+			reasoningDeltaOut = streamReasoning[emittedReasoningLen:]
+		} else {
+			reasoningDeltaOut = streamReasoning
+			emittedReasoningLen = 0
+		}
+
+		emittedContentLen = len(streamContent)
+		emittedReasoningLen = len(streamReasoning)
+
+		if onDelta != nil && (contentDeltaOut != "" || reasoningDeltaOut != "") {
 			if err := onDelta(model.AssistantReplyDelta{
-				Content:          deltaContent,
-				ReasoningContent: deltaReasoning,
+				Content:          contentDeltaOut,
+				ReasoningContent: reasoningDeltaOut,
 			}); err != nil {
 				return model.AssistantReply{}, err
 			}
@@ -302,6 +328,14 @@ func splitReasoningAndContent(content, reasoning string) (string, string) {
 		cleanContent = strings.TrimSpace(
 			cleanContent[:firstThinkTagIndex] + cleanContent[lastThinkEndTagIndex+len("</think>"):],
 		)
+	} else if firstThinkTagIndex != -1 {
+		// Stream may still be inside an unfinished <think> block.
+		partialThink := strings.TrimSpace(cleanContent[firstThinkTagIndex+len("<think>"):])
+		partialThink = strings.TrimSpace(strings.TrimPrefix(partialThink, "<think>"))
+		if partialThink != "" {
+			parts = append(parts, partialThink)
+		}
+		cleanContent = strings.TrimSpace(cleanContent[:firstThinkTagIndex])
 	} else {
 		matches := thinkTagPattern.FindAllStringSubmatch(cleanContent, -1)
 		if len(matches) > 0 {
@@ -339,5 +373,51 @@ func splitReasoningAndContent(content, reasoning string) (string, string) {
 		cleanReasoning = strings.Join(deduped, "\n\n")
 	}
 
+	cleanContent = stripReasoningPrefix(cleanContent, cleanReasoning)
+
 	return cleanContent, cleanReasoning
+}
+
+func stripReasoningPrefix(content, reasoning string) string {
+	content = strings.TrimSpace(content)
+	reasoning = strings.TrimSpace(reasoning)
+	if content == "" || reasoning == "" {
+		return content
+	}
+
+	if strings.HasPrefix(content, reasoning) {
+		return strings.TrimSpace(content[len(reasoning):])
+	}
+
+	normalizedReasoning := normalizeSpaces(reasoning)
+	if normalizedReasoning == "" {
+		return content
+	}
+
+	normalizedContent := normalizeSpaces(content)
+	if normalizedContent == normalizedReasoning {
+		return ""
+	}
+	if strings.HasPrefix(normalizedContent, normalizedReasoning) {
+		contentFields := strings.Fields(content)
+		reasoningFields := strings.Fields(reasoning)
+		if len(contentFields) >= len(reasoningFields) {
+			prefixMatched := true
+			for i := range reasoningFields {
+				if contentFields[i] != reasoningFields[i] {
+					prefixMatched = false
+					break
+				}
+			}
+			if prefixMatched {
+				return strings.TrimSpace(strings.Join(contentFields[len(reasoningFields):], " "))
+			}
+		}
+	}
+
+	return content
+}
+
+func normalizeSpaces(input string) string {
+	return strings.Join(strings.Fields(input), " ")
 }

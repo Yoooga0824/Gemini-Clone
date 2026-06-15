@@ -428,7 +428,7 @@ body.hide-header .prompt{
 }
 
 .chats .message__text p{
-    margin: 0 0 0.21rem;
+    margin: 0 0 0.42rem;
 }
 
 .chats .message__text p:last-child{
@@ -437,17 +437,17 @@ body.hide-header .prompt{
 
 .chats .message__text ul,
 .chats .message__text ol{
-    margin: 0.08rem 0 0.1rem 1rem;
+    margin: 0.16rem 0 0.2rem 1rem;
     padding-left: 0.2rem;
 }
 
 .chats .message__text li{
-    margin-bottom: 0.02rem;
+    margin-bottom: 0.04rem;
     line-height: 1.12;
 }
 
 .chats .message__text li p{
-    margin: 0 0 0.08rem;
+    margin: 0 0 0.16rem;
 }
 
 .chats .message__text li p:last-child{
@@ -457,7 +457,11 @@ body.hide-header .prompt{
 .chats .message__text blockquote{
     padding-left: 0.9rem;
     line-height: 1.25;
-    margin: 0.2rem 0;
+    margin: 0.4rem 0;
+}
+
+.chats .message__text pre{
+    margin: 0.9rem 0;
 }
 
 .chats .message__reasoning{

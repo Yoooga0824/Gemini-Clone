@@ -150,7 +150,12 @@ const initReasoningPanelToggle = (incomingMessageElement) => {
   });
 };
 
-const renderReasoningPanel = (incomingMessageElement, reasoningText = "") => {
+const renderReasoningPanel = (
+  incomingMessageElement,
+  reasoningText = "",
+  options = {}
+) => {
+  const { collapseByDefault = true } = options;
   const reasoningPanel = incomingMessageElement.querySelector(".message__reasoning");
   const reasoningTextElement = incomingMessageElement.querySelector(
     ".message__reasoning-text"
@@ -173,9 +178,12 @@ const renderReasoningPanel = (incomingMessageElement, reasoningText = "") => {
   reasoningPanel.dataset.collapsible = "true";
   reasoningPanel.classList.remove("message__reasoning--empty");
   reasoningPanel.classList.remove("hide");
-  if (!reasoningPanel.classList.contains("message__reasoning--collapsed")) {
+  if (collapseByDefault && !reasoningPanel.classList.contains("message__reasoning--collapsed")) {
     reasoningPanel.classList.add("message__reasoning--collapsed");
     reasoningPanel.dataset.expanded = "false";
+  } else if (!collapseByDefault) {
+    reasoningPanel.classList.remove("message__reasoning--collapsed");
+    reasoningPanel.dataset.expanded = "true";
   }
   reasoningTextElement.innerHTML = marked.parse(trimmedReasoning);
 };
@@ -329,7 +337,9 @@ const showTypingEffect = (
 ) => {
   const actionsElement = incomingMessageElement.querySelector(".message__actions");
   actionsElement?.classList.add("hide");
-  renderReasoningPanel(incomingMessageElement, reasoningText);
+  renderReasoningPanel(incomingMessageElement, reasoningText, {
+    collapseByDefault: true,
+  });
 
   if (skipEffect) {
     // Display content directly without typing
@@ -387,18 +397,154 @@ const consumeAssistantEventStream = async (
   const reader = response.body.getReader();
   const decoder = new TextDecoder("utf-8");
   let buffered = "";
-  let fullContent = "";
-  let fullReasoning = "";
+  let visibleContent = "";
+  let visibleReasoning = "";
+  let renderedReasoning = "";
+  let thinkMode = false;
+  let pendingTagPrefix = "";
   let streamStarted = false;
+  let reasoningTypewriterTimer = null;
+  const REASONING_TYPEWRITER_DELAY_MS = 16;
+
+  const stripReasoningOverlap = (contentText, reasoningText) => {
+    const content = contentText || "";
+    const reasoning = (reasoningText || "").trim();
+    if (!reasoning) return content;
+
+    if (content.startsWith(reasoning)) {
+      return content.slice(reasoning.length).replace(/^\s+/, "");
+    }
+
+    const normalizedReasoning = reasoning.replace(/\s+/g, " ").trim();
+    if (!normalizedReasoning) return content;
+    const normalizedContentPrefix = content.slice(0, reasoning.length + 32).replace(/\s+/g, " ").trim();
+    if (
+      normalizedContentPrefix &&
+      (normalizedContentPrefix === normalizedReasoning ||
+        normalizedContentPrefix.startsWith(normalizedReasoning))
+    ) {
+      return content.slice(Math.min(content.length, reasoning.length)).replace(/^\s+/, "");
+    }
+
+    return content;
+  };
+
+  const shouldTreatDeltaContentAsReasoning = (deltaContent, deltaReasoning) => {
+    const contentNorm = (deltaContent || "").replace(/\s+/g, " ").trim();
+    const reasoningNorm = (deltaReasoning || "").replace(/\s+/g, " ").trim();
+    if (!contentNorm || !reasoningNorm) return false;
+    return (
+      contentNorm === reasoningNorm ||
+      contentNorm.startsWith(reasoningNorm) ||
+      reasoningNorm.startsWith(contentNorm)
+    );
+  };
+
+  const renderCurrentFrame = () => {
+    const contentForDisplay = stripReasoningOverlap(visibleContent, visibleReasoning);
+    messageElement.innerHTML = marked.parse(contentForDisplay || "");
+    renderReasoningPanel(incomingMessageElement, renderedReasoning, {
+      collapseByDefault: false,
+    });
+    scrollChatsToBottom("auto");
+  };
+
+  const syncReasoningTypewriter = () => {
+    const targetReasoning = visibleReasoning || "";
+
+    if (
+      renderedReasoning.length > targetReasoning.length ||
+      !targetReasoning.startsWith(renderedReasoning)
+    ) {
+      renderedReasoning = targetReasoning;
+      renderCurrentFrame();
+      return;
+    }
+
+    if (renderedReasoning === targetReasoning) return;
+    if (reasoningTypewriterTimer) return;
+
+    reasoningTypewriterTimer = setInterval(() => {
+      const latestTarget = visibleReasoning || "";
+      if (
+        renderedReasoning.length > latestTarget.length ||
+        !latestTarget.startsWith(renderedReasoning)
+      ) {
+        renderedReasoning = latestTarget;
+        clearInterval(reasoningTypewriterTimer);
+        reasoningTypewriterTimer = null;
+        renderCurrentFrame();
+        return;
+      }
+
+      if (renderedReasoning.length < latestTarget.length) {
+        renderedReasoning += latestTarget.charAt(renderedReasoning.length);
+        renderCurrentFrame();
+      }
+
+      if (renderedReasoning.length >= latestTarget.length) {
+        clearInterval(reasoningTypewriterTimer);
+        reasoningTypewriterTimer = null;
+      }
+    }, REASONING_TYPEWRITER_DELAY_MS);
+  };
 
   const applyRender = () => {
-    const parsed = extractReasoningAndContentFromMessage({
-      content: fullContent,
-      reasoning_content: fullReasoning,
-    });
-    messageElement.innerHTML = marked.parse(parsed.content || "");
-    renderReasoningPanel(incomingMessageElement, parsed.reasoning);
-    scrollChatsToBottom("auto");
+    renderCurrentFrame();
+    syncReasoningTypewriter();
+  };
+
+  const splitIncompleteTagSuffix = (segment, tag) => {
+    const lowered = segment.toLowerCase();
+    const loweredTag = tag.toLowerCase();
+    const maxPrefix = Math.min(lowered.length, loweredTag.length - 1);
+    for (let i = maxPrefix; i >= 1; i--) {
+      if (lowered.endsWith(loweredTag.slice(0, i))) {
+        return {
+          stablePart: segment.slice(0, -i),
+          carryPart: segment.slice(-i),
+        };
+      }
+    }
+    return { stablePart: segment, carryPart: "" };
+  };
+
+  const routeMixedDelta = (deltaText) => {
+    if (!deltaText) return;
+    let working = pendingTagPrefix + deltaText;
+    pendingTagPrefix = "";
+
+    while (working) {
+      if (thinkMode) {
+        const closeIndex = working.toLowerCase().indexOf("</think>");
+        if (closeIndex === -1) {
+          const { stablePart, carryPart } = splitIncompleteTagSuffix(
+            working,
+            "</think>"
+          );
+          visibleReasoning += stablePart;
+          pendingTagPrefix = carryPart;
+          break;
+        }
+        visibleReasoning += working.slice(0, closeIndex);
+        working = working.slice(closeIndex + "</think>".length);
+        thinkMode = false;
+      } else {
+        const openIndex = working.toLowerCase().indexOf("<think>");
+        if (openIndex === -1) {
+          const { stablePart, carryPart } = splitIncompleteTagSuffix(
+            working,
+            "<think>"
+          );
+          visibleContent += stablePart;
+          pendingTagPrefix = carryPart;
+          break;
+        }
+        visibleContent += working.slice(0, openIndex);
+        working = working.slice(openIndex + "<think>".length);
+        thinkMode = true;
+      }
+    }
   };
 
   while (true) {
@@ -437,21 +583,33 @@ const consumeAssistantEventStream = async (
       }
 
       if (eventData.type === "delta" || eventData.type === "done") {
-        if (typeof eventData.content === "string" && eventData.content) {
-          if (eventData.type === "delta") {
-            fullContent += eventData.content;
-          } else {
-            fullContent = eventData.content;
+        if (eventData.type === "done") {
+          const finalParsed = extractReasoningAndContentFromMessage({
+            content:
+              typeof eventData.content === "string" ? eventData.content : visibleContent,
+            reasoning_content:
+              typeof eventData.reasoning_content === "string"
+                ? eventData.reasoning_content
+                : visibleReasoning,
+          });
+          visibleContent = finalParsed.content || "";
+          visibleReasoning = finalParsed.reasoning || "";
+          thinkMode = false;
+          pendingTagPrefix = "";
+        } else {
+          if (typeof eventData.reasoning_content === "string" && eventData.reasoning_content) {
+            visibleReasoning += eventData.reasoning_content;
           }
-        }
-        if (
-          typeof eventData.reasoning_content === "string" &&
-          eventData.reasoning_content
-        ) {
-          if (eventData.type === "delta") {
-            fullReasoning += eventData.reasoning_content;
-          } else {
-            fullReasoning = eventData.reasoning_content;
+          if (typeof eventData.content === "string" && eventData.content) {
+            const overlappedWithReasoning = shouldTreatDeltaContentAsReasoning(
+              eventData.content,
+              typeof eventData.reasoning_content === "string"
+                ? eventData.reasoning_content
+                : ""
+            );
+            if (!overlappedWithReasoning) {
+              routeMixedDelta(eventData.content);
+            }
           }
         }
 
@@ -467,6 +625,11 @@ const consumeAssistantEventStream = async (
   }
 
   incomingMessageElement.classList.remove("message--loading");
+  if (reasoningTypewriterTimer) {
+    clearInterval(reasoningTypewriterTimer);
+    reasoningTypewriterTimer = null;
+  }
+  renderedReasoning = visibleReasoning || "";
   applyRender();
   hljs.highlightAll();
   addCopyButtonToCodeBlocks();
