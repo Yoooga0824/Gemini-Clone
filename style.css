@@ -1,11 +1,17 @@
-@import url('https://fonts.googleapis.com/css2?family=Noto+Serif+SC:wght@300;400;500;600;700&family=Open+Sans:ital,wght@0,300..800;1,300..800&display=swap');
+@font-face{
+    font-family: "Inter";
+    src: url("assets/fonts/inter/InterVariable.woff2") format("woff2");
+    font-weight: 100 900;
+    font-style: normal;
+    font-display: swap;
+}
 
 *{
     margin: 0;
     padding: 0;
     outline: none;
     box-sizing: border-box;
-    font-family: "Open Sans", "Noto Serif SC", serif;
+    font-family: "Inter", "Noto Serif SC", sans-serif;
 }
 
 :root{
@@ -26,7 +32,7 @@
     --chat-scrollbar-thumb-hover: #2a2a2a;
     --chat-scrollbar-track: #000000;
     --prompt-expand-shift: 0px;
-    --prompt-prechat-transform: translateY(calc(-51vh + 3.2rem));
+    --prompt-prechat-transform: translateY(calc(-54vh + 3.2rem));
 }
 
 .light_mode{
@@ -51,6 +57,12 @@
 html,
 body{
     background: var(--primary-color);
+}
+
+input,
+textarea,
+button{
+    font-family: "Inter", "Noto Serif SC", sans-serif;
 }
 
 html{
@@ -872,7 +884,7 @@ blockquote{
     }
 
     body:not(.hide-header) .prompt{
-        --prompt-prechat-transform: translateY(calc(-50vh + 3.2rem));
+        --prompt-prechat-transform: translateY(calc(-46vh + 3.2rem));
         transform: var(--prompt-prechat-transform);
     }
 
