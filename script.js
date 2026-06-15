@@ -411,12 +411,16 @@ const consumeAssistantEventStream = async (
   let buffered = "";
   let visibleContent = "";
   let visibleReasoning = "";
+  let renderedContent = "";
   let renderedReasoning = "";
   let thinkMode = false;
   let pendingTagPrefix = "";
   let streamStarted = false;
+  let streamCompleted = false;
   let reasoningTypewriterTimer = null;
+  let contentTypewriterTimer = null;
   const REASONING_TYPEWRITER_DELAY_MS = 16;
+  const CONTENT_TYPEWRITER_DELAY_MS = 16;
 
   const stripReasoningOverlap = (contentText, reasoningText) => {
     const content = contentText || "";
@@ -452,13 +456,67 @@ const consumeAssistantEventStream = async (
     );
   };
 
-  const renderCurrentFrame = () => {
+  const getContentTargetForCurrentPhase = () => {
     const contentForDisplay = stripReasoningOverlap(visibleContent, visibleReasoning);
-    messageElement.innerHTML = marked.parse(contentForDisplay || "");
+    // Hard gate: never render content before stream completion.
+    // This prevents any transient reasoning text from flashing in content area.
+    if (!streamCompleted) return "";
+
+    const hasReasoning = ENABLE_REASONING_OUTPUT && (visibleReasoning || "").trim().length > 0;
+    if (!hasReasoning) return contentForDisplay || "";
+
+    // Two-phase streaming: reasoning first, then content.
+    // Content starts only after reasoning typewriter has fully caught up.
+    if (renderedReasoning !== (visibleReasoning || "")) return "";
+    return contentForDisplay || "";
+  };
+
+  const renderCurrentFrame = () => {
+    messageElement.innerHTML = marked.parse(renderedContent || "");
     renderReasoningPanel(incomingMessageElement, renderedReasoning, {
       collapseByDefault: false,
     });
     scrollChatsToBottom("auto");
+  };
+
+  const syncContentTypewriter = () => {
+    const targetContent = getContentTargetForCurrentPhase();
+
+    if (
+      renderedContent.length > targetContent.length ||
+      !targetContent.startsWith(renderedContent)
+    ) {
+      renderedContent = targetContent;
+      renderCurrentFrame();
+      return;
+    }
+
+    if (renderedContent === targetContent) return;
+    if (contentTypewriterTimer) return;
+
+    contentTypewriterTimer = setInterval(() => {
+      const latestTarget = getContentTargetForCurrentPhase();
+      if (
+        renderedContent.length > latestTarget.length ||
+        !latestTarget.startsWith(renderedContent)
+      ) {
+        renderedContent = latestTarget;
+        clearInterval(contentTypewriterTimer);
+        contentTypewriterTimer = null;
+        renderCurrentFrame();
+        return;
+      }
+
+      if (renderedContent.length < latestTarget.length) {
+        renderedContent += latestTarget.charAt(renderedContent.length);
+        renderCurrentFrame();
+      }
+
+      if (renderedContent.length >= latestTarget.length) {
+        clearInterval(contentTypewriterTimer);
+        contentTypewriterTimer = null;
+      }
+    }, CONTENT_TYPEWRITER_DELAY_MS);
   };
 
   const syncReasoningTypewriter = () => {
@@ -492,11 +550,13 @@ const consumeAssistantEventStream = async (
       if (renderedReasoning.length < latestTarget.length) {
         renderedReasoning += latestTarget.charAt(renderedReasoning.length);
         renderCurrentFrame();
+        syncContentTypewriter();
       }
 
       if (renderedReasoning.length >= latestTarget.length) {
         clearInterval(reasoningTypewriterTimer);
         reasoningTypewriterTimer = null;
+        syncContentTypewriter();
       }
     }, REASONING_TYPEWRITER_DELAY_MS);
   };
@@ -504,6 +564,7 @@ const consumeAssistantEventStream = async (
   const applyRender = () => {
     renderCurrentFrame();
     syncReasoningTypewriter();
+    syncContentTypewriter();
   };
 
   const splitIncompleteTagSuffix = (segment, tag) => {
@@ -596,6 +657,7 @@ const consumeAssistantEventStream = async (
 
       if (eventData.type === "delta" || eventData.type === "done") {
         if (eventData.type === "done") {
+          streamCompleted = true;
           const finalParsed = extractReasoningAndContentFromMessage({
             content:
               typeof eventData.content === "string" ? eventData.content : visibleContent,
@@ -645,7 +707,10 @@ const consumeAssistantEventStream = async (
     clearInterval(reasoningTypewriterTimer);
     reasoningTypewriterTimer = null;
   }
-  renderedReasoning = visibleReasoning || "";
+  if (contentTypewriterTimer) {
+    clearInterval(contentTypewriterTimer);
+    contentTypewriterTimer = null;
+  }
   applyRender();
   hljs.highlightAll();
   addCopyButtonToCodeBlocks();
