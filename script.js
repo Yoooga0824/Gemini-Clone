@@ -27,6 +27,7 @@ const headerCursor = document.querySelector(".header__cursor");
 const SCROLL_FOLLOW_THRESHOLD = 80;
 let shouldAutoScroll = true;
 const pageScrollRoot = document.scrollingElement || document.documentElement;
+const THINK_TAG_PATTERN = /<think>\s*([\s\S]*?)\s*<\/think>/gi;
 
 const getActiveScrollElement = () => {
   const canScrollInChats =
@@ -54,6 +55,115 @@ const scrollChatsToBottom = (behavior = "smooth", force = false) => {
   }
 
   scrollElement.scrollTo({ top: targetTop, behavior });
+};
+
+const extractReasoningAndContentFromMessage = (responseMessage = {}) => {
+  const rawContent = typeof responseMessage?.content === "string"
+    ? responseMessage.content
+    : "";
+
+  const reasoningCandidates = [
+    responseMessage?.reasoning_content,
+    responseMessage?.reasoning,
+    responseMessage?.reasoningContent,
+  ];
+
+  const reasoningParts = [];
+  for (const candidate of reasoningCandidates) {
+    if (typeof candidate === "string" && candidate.trim()) {
+      reasoningParts.push(candidate.trim());
+      break;
+    }
+  }
+
+  let cleanedContent = rawContent;
+  const firstThinkTagIndex = rawContent.indexOf("<think>");
+  const lastThinkEndTagIndex = rawContent.lastIndexOf("</think>");
+
+  if (firstThinkTagIndex !== -1 && lastThinkEndTagIndex > firstThinkTagIndex) {
+    const thinkBlockStart = firstThinkTagIndex + "<think>".length;
+    const thinkBlock = rawContent
+      .slice(thinkBlockStart, lastThinkEndTagIndex)
+      .replace(/^\s*<think>\s*/i, "")
+      .replace(/\s*<\/think>\s*$/i, "")
+      .trim();
+
+    if (thinkBlock) {
+      reasoningParts.push(thinkBlock);
+    }
+
+    cleanedContent = (
+      rawContent.slice(0, firstThinkTagIndex) +
+      rawContent.slice(lastThinkEndTagIndex + "</think>".length)
+    ).trim();
+  } else {
+    const tagMatches = Array.from(rawContent.matchAll(THINK_TAG_PATTERN));
+    for (const match of tagMatches) {
+      const chunk = (match?.[1] || "").trim();
+      if (chunk) {
+        reasoningParts.push(chunk);
+      }
+    }
+    cleanedContent = rawContent.replace(THINK_TAG_PATTERN, "").trim();
+  }
+
+  cleanedContent = cleanedContent.replace(/<\/?think>/gi, "").trim();
+  const dedupedReasoning = [...new Set(reasoningParts)].join("\n\n").trim();
+
+  return {
+    content: cleanedContent,
+    reasoning: dedupedReasoning,
+  };
+};
+
+const initReasoningPanelToggle = (incomingMessageElement) => {
+  const reasoningPanel = incomingMessageElement.querySelector(".message__reasoning");
+  const toggleButton = incomingMessageElement.querySelector(".message__reasoning-toggle");
+  if (!reasoningPanel || !toggleButton || toggleButton.dataset.bound === "true") return;
+
+  toggleButton.dataset.bound = "true";
+  toggleButton.addEventListener("click", () => {
+    const collapsed = reasoningPanel.classList.toggle("message__reasoning--collapsed");
+    toggleButton.textContent = collapsed ? "展开" : "收起";
+    scrollChatsToBottom("smooth");
+  });
+};
+
+const renderReasoningPanel = (incomingMessageElement, reasoningText = "") => {
+  const reasoningPanel = incomingMessageElement.querySelector(".message__reasoning");
+  const reasoningTextElement = incomingMessageElement.querySelector(
+    ".message__reasoning-text"
+  );
+  const toggleButton = incomingMessageElement.querySelector(".message__reasoning-toggle");
+  if (!reasoningPanel || !reasoningTextElement || !toggleButton) return;
+
+  initReasoningPanelToggle(incomingMessageElement);
+
+  const trimmedReasoning = reasoningText.trim();
+  if (!trimmedReasoning) {
+    reasoningPanel.classList.remove("hide");
+    reasoningPanel.classList.add("message__reasoning--collapsed");
+    toggleButton.textContent = "展开";
+    reasoningTextElement.innerHTML = `<p>本轮没有可展示的思考内容。</p>`;
+    toggleButton.disabled = true;
+    reasoningPanel.classList.add("message__reasoning--empty");
+    return;
+  }
+
+  toggleButton.disabled = false;
+  reasoningPanel.classList.remove("message__reasoning--empty");
+  reasoningPanel.classList.remove("hide");
+  if (!reasoningPanel.classList.contains("message__reasoning--collapsed")) {
+    reasoningPanel.classList.add("message__reasoning--collapsed");
+    toggleButton.textContent = "展开";
+  }
+  reasoningTextElement.innerHTML = marked.parse(trimmedReasoning);
+};
+
+const showReasoningLoading = (incomingMessageElement) => {
+  const reasoningPanel = incomingMessageElement.querySelector(".message__reasoning");
+  if (!reasoningPanel) return;
+  reasoningPanel.classList.add("hide");
 };
 
 // Play opening title typing animation on each refresh
@@ -115,21 +225,34 @@ const loadSavedChatHistory = () => {
     chatHistoryContainer.appendChild(outgoingMessageElement);
 
     // Display the API response
-    const responseText =
-      conversation.apiResponse?.choices?.[0]?.message?.content ||
+    const responseMessage =
+      conversation.apiResponse?.choices?.[0]?.message;
+    const { content: responseText, reasoning: reasoningText } =
+      extractReasoningAndContentFromMessage(responseMessage);
+    const fallbackText =
       conversation.apiResponse?.candidates?.[0]?.content?.parts?.[0]?.text;
-    const parsedApiResponse = marked.parse(responseText); // Convert to HTML
-    const rawApiResponse = responseText; // Plain text version
+    const finalResponseText = responseText || fallbackText || "";
+    const parsedApiResponse = marked.parse(finalResponseText); // Convert to HTML
+    const rawApiResponse = finalResponseText; // Plain text version
 
     const responseHtml = `
 
            <div class="message__content">
                 <img class="message__avatar" src="assets/YoooFind.png" alt="Gemini avatar">
-                <p class="message__text"></p>
-                <div class="message__loading-indicator hide">
-                    <div class="message__loading-bar"></div>
-                    <div class="message__loading-bar"></div>
-                    <div class="message__loading-bar"></div>
+                <div class="message__body">
+                    <div class="message__reasoning">
+                        <div class="message__reasoning-header">
+                            <div class="message__reasoning-title">深度思考</div>
+                            <button type="button" class="message__reasoning-toggle">展开</button>
+                        </div>
+                        <div class="message__reasoning-text"></div>
+                    </div>
+                    <p class="message__text"></p>
+                    <div class="message__loading-indicator hide">
+                        <div class="message__loading-bar"></div>
+                        <div class="message__loading-bar"></div>
+                        <div class="message__loading-bar"></div>
+                    </div>
                 </div>
             </div>
             <span onClick="copyMessageToClipboard(this)" class="message__icon hide"><i class='bx bx-copy-alt'></i></span>
@@ -151,12 +274,14 @@ const loadSavedChatHistory = () => {
       parsedApiResponse,
       messageTextElement,
       incomingMessageElement,
-      true
+      true,
+      reasoningText
     ); // 'true' skips typing
   });
 
   document.body.classList.toggle("hide-header", savedConversations.length > 0);
 };
+
 
 // create a new chat message element
 const createChatMessageElement = (htmlContent, ...cssClasses) => {
@@ -172,11 +297,13 @@ const showTypingEffect = (
   htmlText,
   messageElement,
   incomingMessageElement,
-  skipEffect = false
+  skipEffect = false,
+  reasoningText = ""
 ) => {
   const copyIconElement =
     incomingMessageElement.querySelector(".message__icon");
   copyIconElement.classList.add("hide"); // Initially hide copy button
+  renderReasoningPanel(incomingMessageElement, reasoningText);
 
   if (skipEffect) {
     // Display content directly without typing
@@ -189,7 +316,17 @@ const showTypingEffect = (
     return;
   }
 
-  const tokens = Array.from(rawText);
+  const tokens = Array.from(rawText || "");
+  if (tokens.length === 0) {
+    messageElement.innerHTML = htmlText;
+    hljs.highlightAll();
+    addCopyButtonToCodeBlocks();
+    copyIconElement.classList.remove("hide");
+    isGeneratingResponse = false;
+    scrollChatsToBottom("auto");
+    return;
+  }
+
   let tokenIndex = 0;
   let streamedText = "";
 
@@ -228,27 +365,30 @@ const requestApiResponse = async (incomingMessageElement) => {
     const responseData = await response.json();
     if (!response.ok) throw new Error(responseData?.error?.message || "请求失败");
 
-    const responseText =
-      responseData?.choices?.[0]?.message?.content;
-    if (!responseText) throw new Error("Invalid API response.");
+    const responseMessage = responseData?.choices?.[0]?.message;
+    const { content: responseText, reasoning: reasoningText } =
+      extractReasoningAndContentFromMessage(responseMessage);
+    if (!responseText && !reasoningText) throw new Error("Invalid API response.");
 
     const parsedApiResponse = marked.parse(responseText);
     const rawApiResponse = responseText;
+    incomingMessageElement.classList.remove("message--loading");
 
     showTypingEffect(
       rawApiResponse,
       parsedApiResponse,
       messageTextElement,
-      incomingMessageElement
+      incomingMessageElement,
+      false,
+      reasoningText
     );
 
     // Chat history persistence is intentionally disabled.
   } catch (error) {
     isGeneratingResponse = false;
+    incomingMessageElement.classList.remove("message--loading");
     messageTextElement.innerText = error.message;
     messageTextElement.closest(".message").classList.add("message--error");
-  } finally {
-    incomingMessageElement.classList.remove("message--loading");
   }
 };
 
@@ -297,11 +437,20 @@ const displayLoadingAnimation = () => {
 
         <div class="message__content">
             <img class="message__avatar" src="assets/YoooFind.png" alt="Gemini avatar">
-            <p class="message__text"></p>
-            <div class="message__loading-indicator">
-                <div class="message__loading-bar"></div>
-                <div class="message__loading-bar"></div>
-                <div class="message__loading-bar"></div>
+            <div class="message__body">
+                <div class="message__reasoning hide">
+                    <div class="message__reasoning-header">
+                        <div class="message__reasoning-title">深度思考</div>
+                        <button type="button" class="message__reasoning-toggle">收起</button>
+                    </div>
+                    <div class="message__reasoning-text"></div>
+                </div>
+                <p class="message__text"></p>
+                <div class="message__loading-indicator">
+                    <div class="message__loading-bar"></div>
+                    <div class="message__loading-bar"></div>
+                    <div class="message__loading-bar"></div>
+                </div>
             </div>
         </div>
         <span onClick="copyMessageToClipboard(this)" class="message__icon hide"><i class='bx bx-copy-alt'></i></span>
@@ -314,6 +463,7 @@ const displayLoadingAnimation = () => {
     "message--loading"
   );
   chatHistoryContainer.appendChild(loadingMessageElement);
+  showReasoningLoading(loadingMessageElement);
   scrollChatsToBottom("smooth");
 
   requestApiResponse(loadingMessageElement);

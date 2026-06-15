@@ -26,6 +26,14 @@ type Choice struct {
 }
 
 type Message struct {
-	Role    string `json:"role"`
-	Content string `json:"content"`
+	Role             string `json:"role"`
+	Content          string `json:"content"`
+	ReasoningContent string `json:"reasoning_content,omitempty"`
+}
+
+// AssistantReply is an internal normalized shape from provider to service.
+// Content and reasoning are separated so frontend can render them in different panels.
+type AssistantReply struct {
+	Content          string
+	ReasoningContent string
 }

@@ -46,8 +46,9 @@ func (h *ChatHandler) PostChat(w http.ResponseWriter, r *http.Request) {
 		Choices: []model.Choice{
 			{
 				Message: model.Message{
-					Role:    "assistant",
-					Content: reply,
+					Role:             "assistant",
+					Content:          reply.Content,
+					ReasoningContent: reply.ReasoningContent,
 				},
 			},
 		},
