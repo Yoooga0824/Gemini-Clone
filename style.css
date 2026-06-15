@@ -463,6 +463,10 @@ body.hide-header .prompt{
     backdrop-filter: blur(2px);
 }
 
+.chats .message__reasoning[data-collapsible="true"]{
+    cursor: pointer;
+}
+
 .chats .message__reasoning-title{
     font-size: 0.72rem;
     letter-spacing: 0.04em;
@@ -472,29 +476,17 @@ body.hide-header .prompt{
 .chats .message__reasoning-header{
     display: flex;
     align-items: center;
-    justify-content: space-between;
-    gap: 0.5rem;
     margin-bottom: 0.3rem;
-}
-
-.chats .message__reasoning-toggle{
-    border: none;
-    background: transparent;
-    color: var(--placeholder-color);
-    font-size: 0.72rem;
-    cursor: pointer;
-    padding: 0;
-}
-
-.chats .message__reasoning-toggle:disabled{
-    opacity: 0.5;
-    cursor: default;
 }
 
 .chats .message__reasoning-text{
     color: var(--text-secondary-color);
     font-size: 0.85rem;
     line-height: 1.45;
+    max-height: 520px;
+    opacity: 1;
+    overflow: hidden;
+    transition: max-height 0.18s ease, opacity 0.18s ease;
 }
 
 .chats .message__reasoning-text p{
@@ -506,7 +498,9 @@ body.hide-header .prompt{
 }
 
 .chats .message__reasoning--collapsed .message__reasoning-text{
-    display: none;
+    max-height: 0;
+    opacity: 0;
+    transition-duration: 0.08s;
 }
 
 .hide{

@@ -118,13 +118,13 @@ const extractReasoningAndContentFromMessage = (responseMessage = {}) => {
 
 const initReasoningPanelToggle = (incomingMessageElement) => {
   const reasoningPanel = incomingMessageElement.querySelector(".message__reasoning");
-  const toggleButton = incomingMessageElement.querySelector(".message__reasoning-toggle");
-  if (!reasoningPanel || !toggleButton || toggleButton.dataset.bound === "true") return;
+  if (!reasoningPanel || reasoningPanel.dataset.bound === "true") return;
 
-  toggleButton.dataset.bound = "true";
-  toggleButton.addEventListener("click", () => {
+  reasoningPanel.dataset.bound = "true";
+  reasoningPanel.addEventListener("click", () => {
+    if (reasoningPanel.dataset.collapsible !== "true") return;
     const collapsed = reasoningPanel.classList.toggle("message__reasoning--collapsed");
-    toggleButton.textContent = collapsed ? "展开" : "收起";
+    reasoningPanel.dataset.expanded = collapsed ? "false" : "true";
     scrollChatsToBottom("smooth");
   });
 };
@@ -134,8 +134,7 @@ const renderReasoningPanel = (incomingMessageElement, reasoningText = "") => {
   const reasoningTextElement = incomingMessageElement.querySelector(
     ".message__reasoning-text"
   );
-  const toggleButton = incomingMessageElement.querySelector(".message__reasoning-toggle");
-  if (!reasoningPanel || !reasoningTextElement || !toggleButton) return;
+  if (!reasoningPanel || !reasoningTextElement) return;
 
   initReasoningPanelToggle(incomingMessageElement);
 
@@ -143,19 +142,19 @@ const renderReasoningPanel = (incomingMessageElement, reasoningText = "") => {
   if (!trimmedReasoning) {
     reasoningPanel.classList.remove("hide");
     reasoningPanel.classList.add("message__reasoning--collapsed");
-    toggleButton.textContent = "展开";
     reasoningTextElement.innerHTML = `<p>本轮没有可展示的思考内容。</p>`;
-    toggleButton.disabled = true;
+    reasoningPanel.dataset.collapsible = "false";
+    reasoningPanel.dataset.expanded = "false";
     reasoningPanel.classList.add("message__reasoning--empty");
     return;
   }
 
-  toggleButton.disabled = false;
+  reasoningPanel.dataset.collapsible = "true";
   reasoningPanel.classList.remove("message__reasoning--empty");
   reasoningPanel.classList.remove("hide");
   if (!reasoningPanel.classList.contains("message__reasoning--collapsed")) {
     reasoningPanel.classList.add("message__reasoning--collapsed");
-    toggleButton.textContent = "展开";
+    reasoningPanel.dataset.expanded = "false";
   }
   reasoningTextElement.innerHTML = marked.parse(trimmedReasoning);
 };
@@ -163,6 +162,8 @@ const renderReasoningPanel = (incomingMessageElement, reasoningText = "") => {
 const showReasoningLoading = (incomingMessageElement) => {
   const reasoningPanel = incomingMessageElement.querySelector(".message__reasoning");
   if (!reasoningPanel) return;
+  reasoningPanel.dataset.collapsible = "false";
+  reasoningPanel.dataset.expanded = "false";
   reasoningPanel.classList.add("hide");
 };
 
@@ -243,7 +244,6 @@ const loadSavedChatHistory = () => {
                     <div class="message__reasoning">
                         <div class="message__reasoning-header">
                             <div class="message__reasoning-title">深度思考</div>
-                            <button type="button" class="message__reasoning-toggle">展开</button>
                         </div>
                         <div class="message__reasoning-text"></div>
                     </div>
@@ -442,7 +442,6 @@ const displayLoadingAnimation = () => {
                 <div class="message__reasoning hide">
                     <div class="message__reasoning-header">
                         <div class="message__reasoning-title">深度思考</div>
-                        <button type="button" class="message__reasoning-toggle">收起</button>
                     </div>
                     <div class="message__reasoning-text"></div>
                 </div>
