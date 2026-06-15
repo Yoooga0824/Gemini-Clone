@@ -842,7 +842,7 @@ body.sidebar-collapsed .sidebar__brand{
 }
 
 body.sidebar-collapsed .sidebar__brand:hover .sidebar__brand-logo{
-    opacity: 0;
+    opacity: 1;
 }
 
 body.sidebar-collapsed .sidebar__collapse-btn{
