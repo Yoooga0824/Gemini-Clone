@@ -683,6 +683,10 @@ const bindSidebarEvents = () => {
 const loadSavedChatHistory = () => {
   localStorage.removeItem("saved-api-chats");
   const isLightTheme = localStorage.getItem("themeColor") === "light_mode";
+  const savedSidebarCollapsed = localStorage.getItem("sidebarCollapsed");
+  const shouldCollapseSidebar = savedSidebarCollapsed === null
+    ? true
+    : savedSidebarCollapsed === "true";
 
   themeRoot.classList.toggle("light_mode", isLightTheme);
   themeToggleButton.innerHTML = isLightTheme
@@ -692,7 +696,12 @@ const loadSavedChatHistory = () => {
   chatSessions = [createSession("新聊天")];
   activeSessionId = chatSessions[0].id;
   renderSidebarSessions();
-  setSidebarCollapsed(true);
+  if (isMobileViewport()) {
+    document.body.classList.add("sidebar-collapsed");
+    sidebarElement?.classList.add("app-sidebar--collapsed");
+  } else {
+    setSidebarCollapsed(shouldCollapseSidebar);
+  }
   closeSidebarDrawer();
 
   chatHistoryContainer.innerHTML = "";
