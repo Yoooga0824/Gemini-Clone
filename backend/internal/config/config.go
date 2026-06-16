@@ -17,6 +17,12 @@ type Config struct {
 	UpstreamModel   string
 	MaxTokens       int
 	Temperature     float64
+
+	MySQLDSN        string
+	JWTSecret       string
+	JWTExpiryHours  int
+	AvatarUploadDir string
+	AvatarMaxBytes  int64
 }
 
 func Load() (Config, error) {
@@ -29,10 +35,21 @@ func Load() (Config, error) {
 		UpstreamModel:   getEnv("UPSTREAM_MODEL", "deepseek-chat"),
 		MaxTokens:       getEnvInt("UPSTREAM_MAX_TOKENS", 2048),
 		Temperature:     getEnvFloat("UPSTREAM_TEMPERATURE", 0.7),
+		MySQLDSN:        strings.TrimSpace(getEnv("MYSQL_DSN", "")),
+		JWTSecret:       strings.TrimSpace(getEnv("JWT_SECRET", "")),
+		JWTExpiryHours:  getEnvInt("JWT_EXPIRY_HOURS", 168),
+		AvatarUploadDir: getEnv("AVATAR_UPLOAD_DIR", "./uploads/avatars"),
+		AvatarMaxBytes:  getEnvInt64("AVATAR_MAX_BYTES", 3*1024*1024),
 	}
 
 	if cfg.UpstreamAPIKey == "" {
 		return Config{}, fmt.Errorf("UPSTREAM_API_KEY is required")
+	}
+	if cfg.MySQLDSN == "" {
+		return Config{}, fmt.Errorf("MYSQL_DSN is required")
+	}
+	if cfg.JWTSecret == "" {
+		return Config{}, fmt.Errorf("JWT_SECRET is required")
 	}
 
 	return cfg, nil
@@ -64,6 +81,18 @@ func getEnvFloat(key string, fallback float64) float64 {
 		return fallback
 	}
 	n, err := strconv.ParseFloat(v, 64)
+	if err != nil {
+		return fallback
+	}
+	return n
+}
+
+func getEnvInt64(key string, fallback int64) int64 {
+	v := os.Getenv(key)
+	if v == "" {
+		return fallback
+	}
+	n, err := strconv.ParseInt(v, 10, 64)
 	if err != nil {
 		return fallback
 	}

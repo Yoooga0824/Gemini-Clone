@@ -1223,6 +1223,214 @@ body.sidebar-collapsed .sidebar__brand:hover .sidebar__expand-btn{
     display: none !important;
 }
 
+.modal-overlay{
+    position: fixed;
+    inset: 0;
+    background: rgba(9, 12, 19, 0.58);
+    backdrop-filter: blur(4px);
+    z-index: 1500;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 1rem;
+}
+
+.modal-card{
+    width: min(460px, calc(100vw - 1.5rem));
+    max-height: calc(100vh - 2rem);
+    overflow: auto;
+    border-radius: 16px;
+    border: 1px solid color-mix(in srgb, var(--secondary-hover-color) 75%, transparent);
+    background: linear-gradient(
+        165deg,
+        color-mix(in srgb, var(--secondary-color) 92%, #0b0e14) 0%,
+        color-mix(in srgb, var(--secondary-color) 98%, #04060a) 100%
+    );
+    box-shadow: 0 24px 70px rgba(0, 0, 0, 0.42);
+    padding: 1rem 1rem 1.15rem;
+    position: relative;
+}
+
+.modal-card--wide{
+    width: min(640px, calc(100vw - 1.5rem));
+}
+
+.modal-close-btn{
+    position: absolute;
+    right: 0.65rem;
+    top: 0.65rem;
+    border: none;
+    background: transparent;
+    color: var(--text-secondary-color);
+    width: 32px;
+    height: 32px;
+    border-radius: 8px;
+    cursor: pointer;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    transition: background 0.22s ease, color 0.22s ease;
+}
+
+.modal-close-btn:hover{
+    background: var(--button-hover-color);
+    color: var(--text-color);
+}
+
+.modal-title{
+    margin: 0;
+    font-size: 1.1rem;
+    font-weight: 600;
+    color: var(--text-color);
+}
+
+.modal-subtitle{
+    margin: 0.35rem 0 0;
+    color: var(--placeholder-color);
+    font-size: 0.86rem;
+}
+
+.modal-tab-row{
+    margin-top: 0.85rem;
+    display: inline-flex;
+    gap: 0.45rem;
+    background: color-mix(in srgb, var(--secondary-color) 70%, transparent);
+    border-radius: 999px;
+    padding: 0.25rem;
+}
+
+.modal-tab-btn{
+    border: none;
+    min-width: 92px;
+    border-radius: 999px;
+    padding: 0.38rem 0.9rem;
+    background: transparent;
+    color: var(--text-secondary-color);
+    cursor: pointer;
+    transition: background 0.22s ease, color 0.22s ease;
+}
+
+.modal-tab-btn.is-active{
+    background: linear-gradient(135deg, #3b82f6 0%, #8b5cf6 65%, #ec4899 100%);
+    color: #fff;
+}
+
+.modal-form{
+    display: flex;
+    flex-direction: column;
+    gap: 0.75rem;
+    margin-top: 0.9rem;
+}
+
+.modal-field{
+    display: flex;
+    flex-direction: column;
+    gap: 0.4rem;
+}
+
+.modal-field span{
+    font-size: 0.84rem;
+    color: var(--placeholder-color);
+}
+
+.modal-field input,
+.modal-field textarea{
+    border: 1px solid color-mix(in srgb, var(--secondary-hover-color) 70%, transparent);
+    border-radius: 10px;
+    background: color-mix(in srgb, var(--secondary-color) 84%, transparent);
+    color: var(--text-color);
+    padding: 0.6rem 0.7rem;
+}
+
+.modal-field textarea{
+    resize: vertical;
+    min-height: 86px;
+}
+
+.modal-primary-btn,
+.modal-secondary-btn{
+    border: none;
+    border-radius: 10px;
+    padding: 0.62rem 0.9rem;
+    cursor: pointer;
+    font-weight: 500;
+    transition: filter 0.2s ease, background 0.2s ease, color 0.2s ease;
+}
+
+.modal-primary-btn{
+    background: linear-gradient(135deg, #3b82f6 0%, #8b5cf6 60%, #ec4899 100%);
+    color: #fff;
+}
+
+.modal-primary-btn:hover{
+    filter: brightness(1.06);
+}
+
+.modal-secondary-btn{
+    background: color-mix(in srgb, var(--secondary-hover-color) 80%, transparent);
+    color: var(--text-color);
+}
+
+.modal-secondary-btn:hover{
+    background: var(--button-hover-color);
+}
+
+.modal-status{
+    margin-top: 0.65rem;
+    min-height: 1.2rem;
+    color: #78a6ff;
+    font-size: 0.84rem;
+}
+
+.modal-status--error{
+    color: #ff6f7d;
+}
+
+.profile-head{
+    display: flex;
+    align-items: center;
+    gap: 0.8rem;
+    margin-top: 0.85rem;
+}
+
+.profile-avatar-preview{
+    width: 62px;
+    height: 62px;
+    border-radius: 50%;
+    object-fit: cover;
+    border: 2px solid color-mix(in srgb, #8b5cf6 45%, #3b82f6 55%);
+}
+
+.profile-upload-btn{
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+}
+
+.profile-upload-btn input{
+    display: none;
+}
+
+.profile-action-row{
+    display: flex;
+    gap: 0.7rem;
+}
+
+.usage-summary{
+    margin-top: 0.8rem;
+    color: var(--text-color);
+    font-size: 0.95rem;
+}
+
+#usageChartCanvas{
+    margin-top: 0.7rem;
+    width: 100%;
+    background: color-mix(in srgb, var(--secondary-color) 88%, transparent);
+    border: 1px solid color-mix(in srgb, var(--secondary-hover-color) 70%, transparent);
+    border-radius: 12px;
+    padding: 0.35rem;
+}
+
 .chats .message--error .message__text{
     color: #e55865;
 }

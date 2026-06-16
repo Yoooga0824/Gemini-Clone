@@ -68,6 +68,11 @@ type chatResponse struct {
 	Choices []struct {
 		Message chatMessage `json:"message"`
 	} `json:"choices"`
+	Usage *struct {
+		PromptTokens     int `json:"prompt_tokens"`
+		CompletionTokens int `json:"completion_tokens"`
+		TotalTokens      int `json:"total_tokens"`
+	} `json:"usage,omitempty"`
 	Error *struct {
 		Message string `json:"message"`
 	} `json:"error,omitempty"`
@@ -82,6 +87,11 @@ type chatStreamChunk struct {
 		} `json:"delta"`
 		Message chatMessage `json:"message"`
 	} `json:"choices"`
+	Usage *struct {
+		PromptTokens     int `json:"prompt_tokens"`
+		CompletionTokens int `json:"completion_tokens"`
+		TotalTokens      int `json:"total_tokens"`
+	} `json:"usage,omitempty"`
 	Error *struct {
 		Message string `json:"message"`
 	} `json:"error,omitempty"`
@@ -153,6 +163,7 @@ func (c *OpenAICompatibleClient) GenerateReply(ctx context.Context, userMessage 
 	return model.AssistantReply{
 		Content:          content,
 		ReasoningContent: reasoning,
+		Usage:            toTokenUsage(decoded.Usage),
 	}, nil
 }
 
@@ -211,6 +222,7 @@ func (c *OpenAICompatibleClient) StreamReply(
 
 	var fullContent strings.Builder
 	var fullReasoning strings.Builder
+	var usage *model.TokenUsage
 	var emittedContentLen int
 	var emittedReasoningLen int
 
@@ -234,6 +246,10 @@ func (c *OpenAICompatibleClient) StreamReply(
 		}
 		if len(chunk.Choices) == 0 {
 			continue
+		}
+
+		if chunk.Usage != nil {
+			usage = toTokenUsage(chunk.Usage)
 		}
 
 		deltaContent := chunk.Choices[0].Delta.Content
@@ -303,7 +319,23 @@ func (c *OpenAICompatibleClient) StreamReply(
 	return model.AssistantReply{
 		Content:          content,
 		ReasoningContent: reasoning,
+		Usage:            usage,
 	}, nil
+}
+
+func toTokenUsage(raw *struct {
+	PromptTokens     int `json:"prompt_tokens"`
+	CompletionTokens int `json:"completion_tokens"`
+	TotalTokens      int `json:"total_tokens"`
+}) *model.TokenUsage {
+	if raw == nil {
+		return nil
+	}
+	return &model.TokenUsage{
+		PromptTokens:     raw.PromptTokens,
+		CompletionTokens: raw.CompletionTokens,
+		TotalTokens:      raw.TotalTokens,
+	}
 }
 
 func splitReasoningAndContent(content, reasoning string) (string, string) {

@@ -14,6 +14,28 @@ const attachButton = document.getElementById("attachButton");
 const attachMenu = document.getElementById("attachMenu");
 const fileInput = document.getElementById("fileInput");
 const attachmentList = document.getElementById("attachmentList");
+const sidebarUserCard = document.getElementById("sidebarUserCard");
+const sidebarUserAvatar = document.getElementById("sidebarUserAvatar");
+const sidebarUserLabel = document.getElementById("sidebarUserLabel");
+const sidebarSettingsButton = document.getElementById("sidebarSettingsButton");
+const authModal = document.getElementById("authModal");
+const authForm = document.getElementById("authForm");
+const authEmailInput = document.getElementById("authEmail");
+const authPasswordInput = document.getElementById("authPassword");
+const authSubmitButton = document.getElementById("authSubmitButton");
+const authStatus = document.getElementById("authStatus");
+const profileModal = document.getElementById("profileModal");
+const profileForm = document.getElementById("profileForm");
+const profileDisplayNameInput = document.getElementById("profileDisplayName");
+const profileFullNameInput = document.getElementById("profileFullName");
+const profileBioInput = document.getElementById("profileBio");
+const profileStatus = document.getElementById("profileStatus");
+const profileAvatarPreview = document.getElementById("profileAvatarPreview");
+const avatarInput = document.getElementById("avatarInput");
+const logoutButton = document.getElementById("logoutButton");
+const usageModal = document.getElementById("usageModal");
+const usageSummaryText = document.getElementById("usageSummaryText");
+const usageChartCanvas = document.getElementById("usageChartCanvas");
 
 // State variables
 let currentUserMessage = null;
@@ -21,6 +43,10 @@ let isGeneratingResponse = false;
 let pendingAttachments = [];
 let chatSessions = [];
 let activeSessionId = null;
+let authMode = "login";
+let authToken = "";
+let currentUser = null;
+let usageChartInstance = null;
 
 const MAX_ATTACHMENT_COUNT = 6;
 const MAX_ATTACHMENT_SIZE = 5 * 1024 * 1024;
@@ -37,6 +63,7 @@ hljs.configure({
 });
 
 const API_REQUEST_URL = config.BACKEND_API_URL;
+const AUTH_TOKEN_STORAGE_KEY = "authToken";
 const promptInput = messageForm.querySelector(".prompt__form-input");
 const themeRoot = document.documentElement;
 const headerTypingTitle = document.querySelector(".header__typing-title");
@@ -93,6 +120,95 @@ const escapeHtml = (text = "") =>
     .replace(/>/g, "&gt;")
     .replace(/"/g, "&quot;")
     .replace(/'/g, "&#39;");
+
+const normalizeAvatarUrl = (rawUrl = "") => {
+  if (!rawUrl) return "assets/profile.png";
+  if (rawUrl.startsWith("http://") || rawUrl.startsWith("https://")) return rawUrl;
+  return `${config.BACKEND_BASE_URL}${rawUrl}`;
+};
+
+const authFetch = async (url, options = {}) => {
+  const headers = {
+    ...(options.headers || {}),
+  };
+  if (!(options.body instanceof FormData)) {
+    headers["Content-Type"] = headers["Content-Type"] || "application/json";
+  }
+  if (authToken) {
+    headers.Authorization = `Bearer ${authToken}`;
+  }
+  return fetch(url, { ...options, headers });
+};
+
+const setAuthStatusText = (text = "", isError = false) => {
+  if (!authStatus) return;
+  authStatus.textContent = text;
+  authStatus.classList.toggle("modal-status--error", isError);
+};
+
+const setProfileStatusText = (text = "", isError = false) => {
+  if (!profileStatus) return;
+  profileStatus.textContent = text;
+  profileStatus.classList.toggle("modal-status--error", isError);
+};
+
+const openModal = (modalElement) => {
+  if (!modalElement) return;
+  modalElement.classList.remove("hide");
+  modalElement.setAttribute("aria-hidden", "false");
+};
+
+const closeModal = (modalElement) => {
+  if (!modalElement) return;
+  modalElement.classList.add("hide");
+  modalElement.setAttribute("aria-hidden", "true");
+};
+
+const setAuthMode = (mode = "login") => {
+  authMode = mode === "register" ? "register" : "login";
+  document.querySelectorAll("[data-auth-mode]").forEach((button) => {
+    button.classList.toggle("is-active", button.dataset.authMode === authMode);
+  });
+  if (authSubmitButton) {
+    authSubmitButton.textContent = authMode === "register" ? "注册" : "登录";
+  }
+  setAuthStatusText("");
+};
+
+const applyUserProfileToUI = () => {
+  const isLoggedIn = !!authToken && !!currentUser;
+  if (sidebarUserLabel) {
+    sidebarUserLabel.textContent = isLoggedIn ? (currentUser.display_name || "用户") : "登录";
+  }
+  const avatarUrl = isLoggedIn ? normalizeAvatarUrl(currentUser.avatar_url) : "assets/profile.png";
+  if (sidebarUserAvatar) sidebarUserAvatar.src = avatarUrl;
+  if (profileAvatarPreview) profileAvatarPreview.src = avatarUrl;
+};
+
+const logout = () => {
+  authToken = "";
+  currentUser = null;
+  localStorage.removeItem(AUTH_TOKEN_STORAGE_KEY);
+  applyUserProfileToUI();
+  closeModal(profileModal);
+  closeModal(usageModal);
+  setAuthMode("login");
+  openModal(authModal);
+};
+
+const parseErrorMessage = async (response, fallback = "请求失败") => {
+  try {
+    const contentType = response.headers.get("content-type") || "";
+    if (contentType.includes("application/json")) {
+      const data = await response.json();
+      return data?.error?.message || fallback;
+    }
+    const text = await response.text();
+    return text || fallback;
+  } catch {
+    return fallback;
+  }
+};
 
 const getCurrentCodeTheme = () =>
   themeRoot.classList.contains("light_mode") ? "github-light" : "github-dark";
@@ -633,6 +749,206 @@ const handleCreateNewChat = () => {
   if (isMobileViewport()) closeSidebarDrawer();
 };
 
+const fetchCurrentUser = async () => {
+  if (!authToken) return null;
+  const response = await authFetch(config.ME_URL, { method: "GET" });
+  if (!response.ok) {
+    if (response.status === 401) {
+      logout();
+      return null;
+    }
+    throw new Error(await parseErrorMessage(response, "获取用户信息失败"));
+  }
+  currentUser = await response.json();
+  applyUserProfileToUI();
+  return currentUser;
+};
+
+const handleAuthSubmit = async (event) => {
+  event.preventDefault();
+  const email = authEmailInput?.value?.trim() || "";
+  const password = authPasswordInput?.value || "";
+  if (!email || !password) {
+    setAuthStatusText("请填写邮箱和密码", true);
+    return;
+  }
+  const url = authMode === "register" ? config.AUTH_REGISTER_URL : config.AUTH_LOGIN_URL;
+  setAuthStatusText("正在提交...");
+  const response = await fetch(url, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ email, password }),
+  });
+  if (!response.ok) {
+    setAuthStatusText(await parseErrorMessage(response, "登录失败"), true);
+    return;
+  }
+  const data = await response.json();
+  authToken = data.token || "";
+  currentUser = data.user || null;
+  if (!authToken || !currentUser) {
+    setAuthStatusText("登录响应异常，请重试", true);
+    return;
+  }
+  localStorage.setItem(AUTH_TOKEN_STORAGE_KEY, authToken);
+  applyUserProfileToUI();
+  authForm?.reset();
+  closeModal(authModal);
+  setAuthStatusText("");
+};
+
+const openProfileModal = async () => {
+  if (!authToken) {
+    setAuthMode("login");
+    openModal(authModal);
+    return;
+  }
+  try {
+    await fetchCurrentUser();
+    profileDisplayNameInput.value = currentUser?.display_name || "";
+    profileFullNameInput.value = currentUser?.full_name || "";
+    profileBioInput.value = currentUser?.bio || "";
+    setProfileStatusText("");
+    openModal(profileModal);
+  } catch (error) {
+    setProfileStatusText(error.message || "加载个人信息失败", true);
+    openModal(profileModal);
+  }
+};
+
+const handleProfileSubmit = async (event) => {
+  event.preventDefault();
+  if (!authToken) {
+    logout();
+    return;
+  }
+  const payload = {
+    display_name: profileDisplayNameInput?.value?.trim() || "用户",
+    full_name: profileFullNameInput?.value?.trim() || "",
+    bio: profileBioInput?.value?.trim() || "",
+  };
+  const response = await authFetch(config.ME_URL, {
+    method: "PATCH",
+    body: JSON.stringify(payload),
+  });
+  if (!response.ok) {
+    setProfileStatusText(await parseErrorMessage(response, "保存失败"), true);
+    return;
+  }
+  currentUser = await response.json();
+  applyUserProfileToUI();
+  setProfileStatusText("已保存");
+};
+
+const handleAvatarUpload = async (event) => {
+  if (!authToken) {
+    logout();
+    return;
+  }
+  const file = event.target?.files?.[0];
+  if (!file) return;
+  const formData = new FormData();
+  formData.append("avatar", file);
+  const response = await authFetch(config.AVATAR_UPLOAD_URL, {
+    method: "POST",
+    body: formData,
+  });
+  if (!response.ok) {
+    setProfileStatusText(await parseErrorMessage(response, "头像上传失败"), true);
+    return;
+  }
+  currentUser = await response.json();
+  applyUserProfileToUI();
+  setProfileStatusText("头像已更新");
+  avatarInput.value = "";
+};
+
+const openUsageModal = async () => {
+  if (!authToken) {
+    setAuthMode("login");
+    openModal(authModal);
+    return;
+  }
+  const response = await authFetch(`${config.USAGE_URL}?days=30`, { method: "GET" });
+  if (!response.ok) {
+    setProfileStatusText(await parseErrorMessage(response, "获取 token 数据失败"), true);
+    return;
+  }
+  const summary = await response.json();
+  usageSummaryText.textContent = `总计 ${summary?.total?.total_tokens || 0} token`;
+  const labels = (summary?.by_day || []).map((item) => item.date);
+  const totals = (summary?.by_day || []).map((item) => item.total_tokens);
+  if (usageChartInstance) {
+    usageChartInstance.destroy();
+  }
+  usageChartInstance = new Chart(usageChartCanvas.getContext("2d"), {
+    type: "line",
+    data: {
+      labels,
+      datasets: [
+        {
+          label: "Daily tokens",
+          data: totals,
+          fill: true,
+          borderColor: "#60a5fa",
+          backgroundColor: "rgba(96, 165, 250, 0.22)",
+          tension: 0.34,
+          pointRadius: 3,
+          pointBackgroundColor: "#c4b5fd",
+        },
+      ],
+    },
+    options: {
+      responsive: true,
+      maintainAspectRatio: false,
+      plugins: {
+        legend: { display: false },
+      },
+      scales: {
+        x: { ticks: { color: getComputedStyle(document.body).getPropertyValue("--text-secondary-color") } },
+        y: { ticks: { color: getComputedStyle(document.body).getPropertyValue("--text-secondary-color") } },
+      },
+    },
+  });
+  openModal(usageModal);
+};
+
+const bindModalEvents = () => {
+  document.querySelectorAll("[data-close-modal]").forEach((button) => {
+    button.addEventListener("click", () => {
+      const modalId = button.getAttribute("data-close-modal");
+      if (!modalId) return;
+      closeModal(document.getElementById(modalId));
+    });
+  });
+  document.querySelectorAll(".modal-overlay").forEach((overlay) => {
+    overlay.addEventListener("click", (event) => {
+      if (event.target === overlay) closeModal(overlay);
+    });
+  });
+  document.querySelectorAll("[data-auth-mode]").forEach((button) => {
+    button.addEventListener("click", () => setAuthMode(button.dataset.authMode || "login"));
+  });
+  authForm?.addEventListener("submit", (event) => {
+    void handleAuthSubmit(event);
+  });
+  profileForm?.addEventListener("submit", (event) => {
+    void handleProfileSubmit(event);
+  });
+  avatarInput?.addEventListener("change", (event) => {
+    void handleAvatarUpload(event);
+  });
+  logoutButton?.addEventListener("click", () => {
+    logout();
+  });
+  sidebarUserCard?.addEventListener("click", () => {
+    void openProfileModal();
+  });
+  sidebarSettingsButton?.addEventListener("click", () => {
+    void openUsageModal();
+  });
+};
+
 const bindSidebarEvents = () => {
   sidebarMobileToggleButton?.addEventListener("click", () => {
     if (isMobileViewport()) {
@@ -706,6 +1022,9 @@ const loadSavedChatHistory = () => {
 
   chatHistoryContainer.innerHTML = "";
   document.body.classList.remove("hide-header");
+  authToken = localStorage.getItem(AUTH_TOKEN_STORAGE_KEY) || "";
+  currentUser = null;
+  applyUserProfileToUI();
 };
 
 
@@ -1073,17 +1392,30 @@ const requestApiResponse = async (incomingMessageElement) => {
   const messageTextElement =
     incomingMessageElement.querySelector(".message__text");
 
+  if (!authToken) {
+    isGeneratingResponse = false;
+    incomingMessageElement.classList.remove("message--loading");
+    messageTextElement.innerText = "请先登录后再发送消息。";
+    messageTextElement.closest(".message").classList.add("message--error");
+    openModal(authModal);
+    return;
+  }
+
   try {
-    const response = await fetch(API_REQUEST_URL, {
+    const response = await authFetch(API_REQUEST_URL, {
       method: "POST",
       headers: {
-        "Content-Type": "application/json",
         Accept: "text/event-stream, application/json",
       },
       body: JSON.stringify({
         message: currentUserMessage,
       }),
     });
+
+    if (response.status === 401) {
+      logout();
+      throw new Error("登录态已过期，请重新登录。");
+    }
 
     const responseContentType = response.headers.get("content-type") || "";
     if (!response.ok) {
@@ -1494,5 +1826,9 @@ messageForm.addEventListener("submit", (e) => {
 // Load saved chat history on page load
 playHeaderTypingAnimation();
 bindSidebarEvents();
+bindModalEvents();
 loadSavedChatHistory();
 adjustPromptInputHeight();
+if (authToken) {
+  void fetchCurrentUser();
+}

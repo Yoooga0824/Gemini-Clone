@@ -18,7 +18,8 @@ type ErrorBody struct {
 // OpenAICompatibleResponse is intentionally shaped like:
 // /v1/chat/completions basic response, so frontend can parse choices[0].message.content
 type OpenAICompatibleResponse struct {
-	Choices []Choice `json:"choices"`
+	Choices []Choice    `json:"choices"`
+	Usage   *TokenUsage `json:"usage,omitempty"`
 }
 
 type Choice struct {
@@ -36,6 +37,7 @@ type Message struct {
 type AssistantReply struct {
 	Content          string
 	ReasoningContent string
+	Usage            *TokenUsage
 }
 
 // AssistantReplyDelta is one streamed incremental chunk from upstream.

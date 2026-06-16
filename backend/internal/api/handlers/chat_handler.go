@@ -6,6 +6,7 @@ import (
 	"net/http"
 	"strings"
 
+	"gemini-clone/backend/internal/middleware"
 	"gemini-clone/backend/internal/model"
 	"gemini-clone/backend/internal/service"
 )
@@ -41,7 +42,8 @@ func (h *ChatHandler) PostChat(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	reply, err := h.chatService.Reply(r.Context(), req.Message)
+	userID := middleware.UserIDFromContext(r.Context())
+	reply, err := h.chatService.Reply(r.Context(), userID, req.Message)
 	if err != nil {
 		writeJSON(w, http.StatusBadRequest, model.ErrorEnvelope{
 			Error: model.ErrorBody{Message: err.Error()},
@@ -59,6 +61,7 @@ func (h *ChatHandler) PostChat(w http.ResponseWriter, r *http.Request) {
 				},
 			},
 		},
+		Usage: reply.Usage,
 	}
 
 	writeJSON(w, http.StatusOK, resp)
@@ -78,7 +81,7 @@ func (h *ChatHandler) postChatStream(w http.ResponseWriter, r *http.Request, req
 	w.Header().Set("Connection", "keep-alive")
 	w.Header().Set("X-Accel-Buffering", "no")
 
-	sendEvent := func(payload map[string]string) error {
+	sendEvent := func(payload any) error {
 		data, err := json.Marshal(payload)
 		if err != nil {
 			return err
@@ -90,7 +93,8 @@ func (h *ChatHandler) postChatStream(w http.ResponseWriter, r *http.Request, req
 		return nil
 	}
 
-	reply, err := h.chatService.StreamReply(r.Context(), req.Message, func(delta model.AssistantReplyDelta) error {
+	userID := middleware.UserIDFromContext(r.Context())
+	reply, err := h.chatService.StreamReply(r.Context(), userID, req.Message, func(delta model.AssistantReplyDelta) error {
 		return sendEvent(map[string]string{
 			"type":              "delta",
 			"content":           delta.Content,
@@ -105,10 +109,11 @@ func (h *ChatHandler) postChatStream(w http.ResponseWriter, r *http.Request, req
 		return
 	}
 
-	_ = sendEvent(map[string]string{
+	_ = sendEvent(map[string]any{
 		"type":              "done",
 		"content":           reply.Content,
 		"reasoning_content": reply.ReasoningContent,
+		"usage":             reply.Usage,
 	})
 }
 

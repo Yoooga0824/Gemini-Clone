@@ -101,11 +101,11 @@
       </div>
 
       <div class="app-sidebar__bottom">
-        <button type="button" class="sidebar__user-card">
-          <img class="sidebar__user-avatar" src="assets/profile.png" alt="用户头像" />
-          <span class="sidebar__label">YoooUser</span>
+        <button type="button" class="sidebar__user-card" id="sidebarUserCard">
+          <img class="sidebar__user-avatar" id="sidebarUserAvatar" src="assets/profile.png" alt="用户头像" />
+          <span class="sidebar__label" id="sidebarUserLabel">登录</span>
         </button>
-        <button type="button" class="sidebar__settings-btn">
+        <button type="button" class="sidebar__settings-btn" id="sidebarSettingsButton">
           <i class="bx bx-cog"></i>
           <span class="sidebar__label">设置</span>
         </button>
@@ -191,6 +191,79 @@
         </div>
       </form>
     </section>
+
+    <div class="modal-overlay hide" id="authModal" aria-hidden="true">
+      <div class="modal-card" role="dialog" aria-modal="true" aria-label="登录或注册">
+        <button type="button" class="modal-close-btn" data-close-modal="authModal" aria-label="关闭">
+          <i class="bx bx-x"></i>
+        </button>
+        <h2 class="modal-title">欢迎来到 YoooFind</h2>
+        <p class="modal-subtitle">登录后可同步历史会话与个人配置</p>
+        <div class="modal-tab-row">
+          <button type="button" class="modal-tab-btn is-active" data-auth-mode="login">登录</button>
+          <button type="button" class="modal-tab-btn" data-auth-mode="register">注册</button>
+        </div>
+        <form class="modal-form" id="authForm">
+          <label class="modal-field">
+            <span>邮箱</span>
+            <input id="authEmail" type="email" required placeholder="you@example.com" />
+          </label>
+          <label class="modal-field">
+            <span>密码</span>
+            <input id="authPassword" type="password" required minlength="6" placeholder="至少 6 位" />
+          </label>
+          <button type="submit" class="modal-primary-btn" id="authSubmitButton">登录</button>
+        </form>
+        <div class="modal-status" id="authStatus"></div>
+      </div>
+    </div>
+
+    <div class="modal-overlay hide" id="profileModal" aria-hidden="true">
+      <div class="modal-card modal-card--wide" role="dialog" aria-modal="true" aria-label="个人信息">
+        <button type="button" class="modal-close-btn" data-close-modal="profileModal" aria-label="关闭">
+          <i class="bx bx-x"></i>
+        </button>
+        <h2 class="modal-title">个人信息</h2>
+        <div class="profile-head">
+          <img class="profile-avatar-preview" id="profileAvatarPreview" src="assets/profile.png" alt="头像预览" />
+          <label class="modal-secondary-btn profile-upload-btn">
+            上传头像
+            <input id="avatarInput" type="file" accept="image/*" />
+          </label>
+        </div>
+        <form class="modal-form" id="profileForm">
+          <label class="modal-field">
+            <span>昵称</span>
+            <input id="profileDisplayName" type="text" maxlength="32" placeholder="用户" />
+          </label>
+          <label class="modal-field">
+            <span>姓名</span>
+            <input id="profileFullName" type="text" maxlength="64" placeholder="你的姓名" />
+          </label>
+          <label class="modal-field">
+            <span>个人简述</span>
+            <textarea id="profileBio" rows="3" maxlength="300" placeholder="介绍一下自己"></textarea>
+          </label>
+          <div class="profile-action-row">
+            <button type="submit" class="modal-primary-btn">保存资料</button>
+            <button type="button" class="modal-secondary-btn" id="logoutButton">退出登录</button>
+          </div>
+        </form>
+        <div class="modal-status" id="profileStatus"></div>
+      </div>
+    </div>
+
+    <div class="modal-overlay hide" id="usageModal" aria-hidden="true">
+      <div class="modal-card modal-card--wide" role="dialog" aria-modal="true" aria-label="Token 用量">
+        <button type="button" class="modal-close-btn" data-close-modal="usageModal" aria-label="关闭">
+          <i class="bx bx-x"></i>
+        </button>
+        <h2 class="modal-title">Token 使用统计</h2>
+        <p class="modal-subtitle">近 30 天用量趋势（精确统计）</p>
+        <div class="usage-summary" id="usageSummaryText">总计 0 token</div>
+        <canvas id="usageChartCanvas" height="210"></canvas>
+      </div>
+    </div>
     <!-- <p class="prompt__disclaim">
       YoooFind 提供的信息可能存在错误，包括涉及个人的信息，请注意甄别并自行核实
     </p> -->
@@ -200,6 +273,7 @@
       src="https://pagead2.googlesyndication.com/pagead/js/adsbygoogle.js?client=ca-pub-8784624020948059"
       crossorigin="anonymous"
     ></script>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.3/dist/chart.umd.min.js"></script>
 
     <script type="module" src="script.js"></script>
   </body>
