@@ -274,7 +274,7 @@ body.hide-header .header{
 
 .prompt{
     position: fixed;
-    background: var(--primary-color);
+    background: transparent;
     z-index: 1000;
     width: calc(100% - var(--sidebar-current-width));
     left: var(--sidebar-current-width);
