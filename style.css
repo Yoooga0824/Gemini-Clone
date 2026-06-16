@@ -612,6 +612,8 @@ body.hide-header .prompt{
     height: var(--sidebar-icon-size);
     border-radius: 8px;
     transition: opacity 0.25s ease;
+    transform: translateZ(0);
+    backface-visibility: hidden;
 }
 
 .sidebar__brand-title{
@@ -641,6 +643,13 @@ body.hide-header .prompt{
 .sidebar__expand-btn i{
     font-size: var(--sidebar-icon-size);
     line-height: 1;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: var(--sidebar-icon-size);
+    height: var(--sidebar-icon-size);
+    transform: translateZ(0);
+    backface-visibility: hidden;
 }
 
 .sidebar__collapse-btn{
@@ -657,12 +666,19 @@ body.hide-header .prompt{
     justify-content: center;
     opacity: 1;
     pointer-events: auto;
-    transition: background 0.25s ease, color 0.25s ease, opacity 0.25s ease;
+    transition: background 0.25s ease, color 0.25s ease;
 }
 
 .sidebar__collapse-btn i{
     font-size: var(--sidebar-icon-size);
     line-height: 1;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: var(--sidebar-icon-size);
+    height: var(--sidebar-icon-size);
+    transform: translateZ(0);
+    backface-visibility: hidden;
 }
 
 .sidebar__collapse-btn:hover{
@@ -892,11 +908,27 @@ body.sidebar-collapsed .sidebar__history{
 .sidebar__settings-btn i{
     font-size: var(--sidebar-icon-size);
     line-height: 1;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: var(--sidebar-icon-size);
+    height: var(--sidebar-icon-size);
+    flex-shrink: 0;
+    transform: translateZ(0);
+    backface-visibility: hidden;
 }
 
 .sidebar__session-icon{
     font-size: var(--sidebar-icon-size);
     line-height: 1;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: var(--sidebar-icon-size);
+    height: var(--sidebar-icon-size);
+    flex-shrink: 0;
+    transform: translateZ(0);
+    backface-visibility: hidden;
 }
 
 body.sidebar-collapsed .sidebar__new-chat-btn,
@@ -927,6 +959,7 @@ body.sidebar-collapsed .sidebar__collapse-btn{
     height: 100%;
     opacity: 0;
     pointer-events: none;
+    transition: none;
 }
 
 body.sidebar-collapsed .sidebar__brand:hover .sidebar__expand-btn{
