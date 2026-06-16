@@ -1591,11 +1591,12 @@ const handleOutgoingMessage = async () => {
   }
   updateActiveSessionTitle(getSessionTitleFromText(outgoingText));
   currentUserMessage = await buildMessageWithAttachments(inputText, activeAttachments);
+  const outgoingAvatarSrc = normalizeAvatarUrl(currentUser?.avatar_url || "");
 
   const outgoingMessageHtml = `
 
         <div class="message__content">
-            <img class="message__avatar" src="assets/profile.png" alt="User avatar">
+            <img class="message__avatar" src="${outgoingAvatarSrc}" alt="User avatar">
             <div class="message__text"></div>
         </div>
 

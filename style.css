@@ -1136,10 +1136,7 @@ body.sidebar-collapsed .sidebar__brand:hover .sidebar__expand-btn{
 }
 
 .chats .message__reasoning-header::after{
-    content: "⌄";
-    font-size: 0.82rem;
-    color: var(--placeholder-color);
-    transition: transform 0.18s ease;
+    content: none;
 }
 
 .chats .message__reasoning--collapsed .message__reasoning-header::after{
@@ -1262,9 +1259,10 @@ body.sidebar-collapsed .sidebar__brand:hover .sidebar__expand-btn{
     border: none;
     background: transparent;
     color: var(--text-secondary-color);
-    width: 32px;
-    height: 32px;
-    border-radius: 8px;
+    width: 40px;
+    height: 40px;
+    border-radius: 10px;
+    font-size: 1.2rem;
     cursor: pointer;
     display: inline-flex;
     align-items: center;
