@@ -4,6 +4,7 @@ import (
 	"context"
 	"database/sql"
 	"fmt"
+	"math"
 	"strings"
 
 	"gemini-clone/backend/internal/model"
@@ -82,7 +83,8 @@ func (s *ChatService) Reply(
 		return model.AssistantReply{}, model.ChatSessionSummary{}, err
 	}
 	if s.usageService != nil {
-		_ = s.usageService.RecordChatUsage(ctx, userID, reply.Usage, s.llmModel)
+		usage := ensureTokenUsage(reply.Usage, contextMessage, reply)
+		_ = s.usageService.RecordChatUsage(ctx, userID, usage, s.llmModel)
 	}
 	return reply, session, nil
 }
@@ -126,7 +128,8 @@ func (s *ChatService) StreamReply(
 		return model.AssistantReply{}, model.ChatSessionSummary{}, err
 	}
 	if s.usageService != nil {
-		_ = s.usageService.RecordChatUsage(ctx, userID, reply.Usage, s.llmModel)
+		usage := ensureTokenUsage(reply.Usage, contextMessage, reply)
+		_ = s.usageService.RecordChatUsage(ctx, userID, usage, s.llmModel)
 	}
 	return reply, session, nil
 }
@@ -235,4 +238,44 @@ func buildSessionTitle(text string) string {
 		return string(runes[:18]) + "..."
 	}
 	return normalized
+}
+
+func ensureTokenUsage(
+	raw *model.TokenUsage,
+	prompt string,
+	reply model.AssistantReply,
+) *model.TokenUsage {
+	if raw != nil && raw.TotalTokens > 0 {
+		return raw
+	}
+
+	promptTokens := estimateTokenCount(prompt)
+	completionText := strings.TrimSpace(strings.Join([]string{
+		reply.Content,
+		reply.ReasoningContent,
+	}, "\n"))
+	completionTokens := estimateTokenCount(completionText)
+
+	if promptTokens == 0 && completionTokens == 0 {
+		return nil
+	}
+
+	return &model.TokenUsage{
+		PromptTokens:     promptTokens,
+		CompletionTokens: completionTokens,
+		TotalTokens:      promptTokens + completionTokens,
+	}
+}
+
+func estimateTokenCount(text string) int {
+	trimmed := strings.TrimSpace(text)
+	if trimmed == "" {
+		return 0
+	}
+	runes := len([]rune(trimmed))
+	approx := int(math.Ceil(float64(runes) / 4.0))
+	if approx < 1 {
+		return 1
+	}
+	return approx
 }

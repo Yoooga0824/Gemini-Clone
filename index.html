@@ -259,9 +259,15 @@
           <i class="bx bx-x"></i>
         </button>
         <h2 class="modal-title">Token 使用统计</h2>
-        <p class="modal-subtitle">近 30 天用量趋势（精确统计）</p>
-        <div class="usage-summary" id="usageSummaryText">总计 0 token</div>
-        <canvas id="usageChartCanvas" height="210"></canvas>
+        <p class="modal-subtitle">可切换查看近30天与历史累计</p>
+        <div class="usage-summary" id="usageSummaryText">近30天 0 token · 历史总计 0 token</div>
+        <div class="usage-toggle-group" id="usageToggleGroup">
+          <button type="button" class="usage-toggle-btn is-active" data-usage-mode="recent30">近30天 Token</button>
+          <button type="button" class="usage-toggle-btn" data-usage-mode="alltime">历史累计 Token</button>
+        </div>
+        <div class="usage-chart-frame">
+          <canvas id="usageChartCanvas" width="560" height="380"></canvas>
+        </div>
       </div>
     </div>
     <!-- <p class="prompt__disclaim">

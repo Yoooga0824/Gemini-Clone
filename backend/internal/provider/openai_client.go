@@ -51,11 +51,16 @@ func NewOpenAICompatibleClient(
 }
 
 type chatRequest struct {
-	Model       string        `json:"model"`
-	Messages    []chatMessage `json:"messages"`
-	MaxTokens   int           `json:"max_tokens,omitempty"`
-	Temperature float64       `json:"temperature,omitempty"`
-	Stream      bool          `json:"stream,omitempty"`
+	Model         string             `json:"model"`
+	Messages      []chatMessage      `json:"messages"`
+	MaxTokens     int                `json:"max_tokens,omitempty"`
+	Temperature   float64            `json:"temperature,omitempty"`
+	Stream        bool               `json:"stream,omitempty"`
+	StreamOptions *chatStreamOptions `json:"stream_options,omitempty"`
+}
+
+type chatStreamOptions struct {
+	IncludeUsage bool `json:"include_usage"`
 }
 
 type chatMessage struct {
@@ -181,6 +186,9 @@ func (c *OpenAICompatibleClient) StreamReply(
 		MaxTokens:   c.maxTokens,
 		Temperature: c.temperature,
 		Stream:      true,
+		StreamOptions: &chatStreamOptions{
+			IncludeUsage: true,
+		},
 	}
 
 	bodyBytes, err := json.Marshal(payload)

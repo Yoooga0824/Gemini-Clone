@@ -38,18 +38,30 @@ func (r *UsageRepository) Insert(ctx context.Context, userID int64, usage model.
 }
 
 func (r *UsageRepository) GetSummary(ctx context.Context, userID int64, days int) (model.UsageSummary, error) {
-	if days <= 0 {
+	if days < 0 {
 		days = 30
 	}
-	fromDate := time.Now().AddDate(0, 0, -days+1).Format("2006-01-02")
+	fromDate := ""
+	if days > 0 {
+		fromDate = time.Now().AddDate(0, 0, -days+1).Format("2006-01-02")
+	}
 
 	totalQuery := `
 		SELECT COALESCE(SUM(prompt_tokens), 0), COALESCE(SUM(completion_tokens), 0), COALESCE(SUM(total_tokens), 0)
 		FROM token_usage
 		WHERE user_id = ? AND DATE(created_at) >= ?
 	`
+	totalArgs := []any{userID, fromDate}
+	if days == 0 {
+		totalQuery = `
+			SELECT COALESCE(SUM(prompt_tokens), 0), COALESCE(SUM(completion_tokens), 0), COALESCE(SUM(total_tokens), 0)
+			FROM token_usage
+			WHERE user_id = ?
+		`
+		totalArgs = []any{userID}
+	}
 	var summary model.UsageSummary
-	if err := r.db.QueryRowContext(ctx, totalQuery, userID, fromDate).Scan(
+	if err := r.db.QueryRowContext(ctx, totalQuery, totalArgs...).Scan(
 		&summary.Total.PromptTokens,
 		&summary.Total.CompletionTokens,
 		&summary.Total.TotalTokens,
@@ -67,7 +79,21 @@ func (r *UsageRepository) GetSummary(ctx context.Context, userID int64, days int
 		GROUP BY DATE(created_at)
 		ORDER BY d ASC
 	`
-	rows, err := r.db.QueryContext(ctx, byDayQuery, userID, fromDate)
+	byDayArgs := []any{userID, fromDate}
+	if days == 0 {
+		byDayQuery = `
+			SELECT DATE(created_at) AS d,
+			       COALESCE(SUM(prompt_tokens), 0),
+			       COALESCE(SUM(completion_tokens), 0),
+			       COALESCE(SUM(total_tokens), 0)
+			FROM token_usage
+			WHERE user_id = ?
+			GROUP BY DATE(created_at)
+			ORDER BY d ASC
+		`
+		byDayArgs = []any{userID}
+	}
+	rows, err := r.db.QueryContext(ctx, byDayQuery, byDayArgs...)
 	if err != nil {
 		return model.UsageSummary{}, fmt.Errorf("query token usage by day: %w", err)
 	}

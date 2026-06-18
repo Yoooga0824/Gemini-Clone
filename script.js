@@ -35,6 +35,7 @@ const avatarInput = document.getElementById("avatarInput");
 const logoutButton = document.getElementById("logoutButton");
 const usageModal = document.getElementById("usageModal");
 const usageSummaryText = document.getElementById("usageSummaryText");
+const usageToggleGroup = document.getElementById("usageToggleGroup");
 const usageChartCanvas = document.getElementById("usageChartCanvas");
 
 // State variables
@@ -47,6 +48,11 @@ let authMode = "login";
 let authToken = "";
 let currentUser = null;
 let usageChartInstance = null;
+let usageChartMode = "recent30";
+let usageChartDataCache = {
+  recentSummary: null,
+  totalSummary: null,
+};
 
 const MAX_ATTACHMENT_COUNT = 6;
 const MAX_ATTACHMENT_SIZE = 5 * 1024 * 1024;
@@ -1067,21 +1073,44 @@ const handleAvatarUpload = async (event) => {
   avatarInput.value = "";
 };
 
-const openUsageModal = async () => {
-  if (!authToken) {
-    setAuthMode("login");
-    openModal(authModal);
-    return;
+const updateUsageToggleUI = () => {
+  if (!usageToggleGroup) return;
+  usageToggleGroup.querySelectorAll("[data-usage-mode]").forEach((button) => {
+    button.classList.toggle("is-active", button.dataset.usageMode === usageChartMode);
+  });
+};
+
+const renderUsageChart = () => {
+  if (!usageChartCanvas || !usageChartDataCache.recentSummary || !usageChartDataCache.totalSummary) return;
+
+  const recentSummary = usageChartDataCache.recentSummary;
+  const totalSummary = usageChartDataCache.totalSummary;
+  const axisColor = getComputedStyle(document.body).getPropertyValue("--text-secondary-color");
+
+  let labels = [];
+  let data = [];
+  let label = "";
+  let borderColor = "#60a5fa";
+  let pointColor = "#c4b5fd";
+  let fillColor = "rgba(96, 165, 250, 0.20)";
+
+  if (usageChartMode === "alltime") {
+    labels = (totalSummary?.by_day || []).map((item) => item.date);
+    let runningTotal = 0;
+    data = (totalSummary?.by_day || []).map((item) => {
+      runningTotal += item?.total_tokens || 0;
+      return runningTotal;
+    });
+    label = "历史累计 Token";
+    borderColor = "#8b5cf6";
+    pointColor = "#ec4899";
+    fillColor = "rgba(139, 92, 246, 0.18)";
+  } else {
+    labels = (recentSummary?.by_day || []).map((item) => item.date);
+    data = (recentSummary?.by_day || []).map((item) => item.total_tokens);
+    label = "近30天每日 Token";
   }
-  const response = await authFetch(`${config.USAGE_URL}?days=30`, { method: "GET" });
-  if (!response.ok) {
-    setProfileStatusText(await parseErrorMessage(response, "获取 token 数据失败"), true);
-    return;
-  }
-  const summary = await response.json();
-  usageSummaryText.textContent = `总计 ${summary?.total?.total_tokens || 0} token`;
-  const labels = (summary?.by_day || []).map((item) => item.date);
-  const totals = (summary?.by_day || []).map((item) => item.total_tokens);
+
   if (usageChartInstance) {
     usageChartInstance.destroy();
   }
@@ -1091,14 +1120,15 @@ const openUsageModal = async () => {
       labels,
       datasets: [
         {
-          label: "Daily tokens",
-          data: totals,
+          label,
+          data,
           fill: true,
-          borderColor: "#60a5fa",
-          backgroundColor: "rgba(96, 165, 250, 0.22)",
-          tension: 0.34,
-          pointRadius: 3,
-          pointBackgroundColor: "#c4b5fd",
+          borderColor,
+          backgroundColor: fillColor,
+          tension: 0.3,
+          pointRadius: 2.2,
+          pointBackgroundColor: pointColor,
+          borderWidth: 2,
         },
       ],
     },
@@ -1109,11 +1139,45 @@ const openUsageModal = async () => {
         legend: { display: false },
       },
       scales: {
-        x: { ticks: { color: getComputedStyle(document.body).getPropertyValue("--text-secondary-color") } },
-        y: { ticks: { color: getComputedStyle(document.body).getPropertyValue("--text-secondary-color") } },
+        x: {
+          ticks: { color: axisColor, maxTicksLimit: 9, font: { size: 11 } },
+          grid: { display: false },
+        },
+        y: {
+          ticks: { color: axisColor, maxTicksLimit: 8, font: { size: 11 } },
+          grid: { color: "rgba(255,255,255,0.07)" },
+        },
       },
     },
   });
+  updateUsageToggleUI();
+};
+
+const openUsageModal = async () => {
+  if (!authToken) {
+    setAuthMode("login");
+    openModal(authModal);
+    return;
+  }
+  const [recentResponse, totalResponse] = await Promise.all([
+    authFetch(`${config.USAGE_URL}?days=30`, { method: "GET" }),
+    authFetch(`${config.USAGE_URL}?days=0`, { method: "GET" }),
+  ]);
+  if (!recentResponse.ok || !totalResponse.ok) {
+    const badResponse = !recentResponse.ok ? recentResponse : totalResponse;
+    setProfileStatusText(await parseErrorMessage(badResponse, "获取 token 数据失败"), true);
+    return;
+  }
+
+  const recentSummary = await recentResponse.json();
+  const totalSummary = await totalResponse.json();
+  usageChartDataCache = { recentSummary, totalSummary };
+
+  const recentTotalTokens = recentSummary?.total?.total_tokens || 0;
+  const allTimeTotalTokens = totalSummary?.total?.total_tokens || 0;
+  usageSummaryText.textContent = `近30天 ${recentTotalTokens} token · 历史总计 ${allTimeTotalTokens} token`;
+
+  renderUsageChart();
   openModal(usageModal);
 };
 
@@ -1150,6 +1214,15 @@ const bindModalEvents = () => {
   });
   sidebarSettingsButton?.addEventListener("click", () => {
     void openUsageModal();
+  });
+  usageToggleGroup?.addEventListener("click", (event) => {
+    const modeButton = event.target.closest("[data-usage-mode]");
+    if (!modeButton) return;
+    const nextMode = modeButton.dataset.usageMode;
+    if (nextMode !== "recent30" && nextMode !== "alltime") return;
+    if (usageChartMode === nextMode) return;
+    usageChartMode = nextMode;
+    renderUsageChart();
   });
 };
 
