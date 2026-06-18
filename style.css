@@ -1459,7 +1459,7 @@ body.sidebar-collapsed .sidebar__brand:hover .sidebar__expand-btn{
 .usage-chart-frame{
     margin-top: 0.7rem;
     width: 100%;
-    aspect-ratio: 560 / 380;
+    aspect-ratio: 560 / 190;
     border-radius: 12px;
     background: color-mix(in srgb, var(--secondary-color) 88%, transparent);
     border: 1px solid color-mix(in srgb, var(--secondary-hover-color) 70%, transparent);
