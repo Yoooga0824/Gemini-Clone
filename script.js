@@ -33,7 +33,6 @@ const profileStatus = document.getElementById("profileStatus");
 const profileAvatarPreview = document.getElementById("profileAvatarPreview");
 const avatarInput = document.getElementById("avatarInput");
 const logoutButton = document.getElementById("logoutButton");
-const usageModal = document.getElementById("usageModal");
 const usageSummaryText = document.getElementById("usageSummaryText");
 const usageToggleGroup = document.getElementById("usageToggleGroup");
 const usageChartCanvas = document.getElementById("usageChartCanvas");
@@ -203,7 +202,6 @@ const logout = () => {
   localStorage.removeItem(AUTH_TOKEN_STORAGE_KEY);
   applyUserProfileToUI();
   closeModal(profileModal);
-  closeModal(usageModal);
   setAuthMode("login");
   openModal(authModal);
 };
@@ -1019,6 +1017,13 @@ const openProfileModal = async () => {
     profileFullNameInput.value = currentUser?.full_name || "";
     profileBioInput.value = currentUser?.bio || "";
     setProfileStatusText("");
+    try {
+      await loadUsagePanelData();
+    } catch (usageError) {
+      if (usageSummaryText) {
+        usageSummaryText.textContent = usageError.message || "Token 数据加载失败";
+      }
+    }
     openModal(profileModal);
   } catch (error) {
     setProfileStatusText(error.message || "加载个人信息失败", true);
@@ -1078,6 +1083,27 @@ const updateUsageToggleUI = () => {
   usageToggleGroup.querySelectorAll("[data-usage-mode]").forEach((button) => {
     button.classList.toggle("is-active", button.dataset.usageMode === usageChartMode);
   });
+};
+
+const loadUsagePanelData = async () => {
+  if (!authToken || !usageSummaryText) return;
+  const [recentResponse, totalResponse] = await Promise.all([
+    authFetch(`${config.USAGE_URL}?days=30`, { method: "GET" }),
+    authFetch(`${config.USAGE_URL}?days=0`, { method: "GET" }),
+  ]);
+  if (!recentResponse.ok || !totalResponse.ok) {
+    const badResponse = !recentResponse.ok ? recentResponse : totalResponse;
+    throw new Error(await parseErrorMessage(badResponse, "获取 token 数据失败"));
+  }
+
+  const recentSummary = await recentResponse.json();
+  const totalSummary = await totalResponse.json();
+  usageChartDataCache = { recentSummary, totalSummary };
+
+  const recentTotalTokens = recentSummary?.total?.total_tokens || 0;
+  const allTimeTotalTokens = totalSummary?.total?.total_tokens || 0;
+  usageSummaryText.textContent = `近30天 ${recentTotalTokens} token · 历史总计 ${allTimeTotalTokens} token`;
+  renderUsageChart();
 };
 
 const renderUsageChart = () => {
@@ -1153,34 +1179,6 @@ const renderUsageChart = () => {
   updateUsageToggleUI();
 };
 
-const openUsageModal = async () => {
-  if (!authToken) {
-    setAuthMode("login");
-    openModal(authModal);
-    return;
-  }
-  const [recentResponse, totalResponse] = await Promise.all([
-    authFetch(`${config.USAGE_URL}?days=30`, { method: "GET" }),
-    authFetch(`${config.USAGE_URL}?days=0`, { method: "GET" }),
-  ]);
-  if (!recentResponse.ok || !totalResponse.ok) {
-    const badResponse = !recentResponse.ok ? recentResponse : totalResponse;
-    setProfileStatusText(await parseErrorMessage(badResponse, "获取 token 数据失败"), true);
-    return;
-  }
-
-  const recentSummary = await recentResponse.json();
-  const totalSummary = await totalResponse.json();
-  usageChartDataCache = { recentSummary, totalSummary };
-
-  const recentTotalTokens = recentSummary?.total?.total_tokens || 0;
-  const allTimeTotalTokens = totalSummary?.total?.total_tokens || 0;
-  usageSummaryText.textContent = `近30天 ${recentTotalTokens} token · 历史总计 ${allTimeTotalTokens} token`;
-
-  renderUsageChart();
-  openModal(usageModal);
-};
-
 const bindModalEvents = () => {
   document.querySelectorAll("[data-close-modal]").forEach((button) => {
     button.addEventListener("click", () => {
@@ -1212,9 +1210,7 @@ const bindModalEvents = () => {
   sidebarUserCard?.addEventListener("click", () => {
     void openProfileModal();
   });
-  sidebarSettingsButton?.addEventListener("click", () => {
-    void openUsageModal();
-  });
+  sidebarSettingsButton?.addEventListener("click", () => {});
   usageToggleGroup?.addEventListener("click", (event) => {
     const modeButton = event.target.closest("[data-usage-mode]");
     if (!modeButton) return;
