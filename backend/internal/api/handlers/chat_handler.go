@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"net/http"
+	"strconv"
 	"strings"
 
 	"gemini-clone/backend/internal/middleware"
@@ -43,7 +44,7 @@ func (h *ChatHandler) PostChat(w http.ResponseWriter, r *http.Request) {
 	}
 
 	userID := middleware.UserIDFromContext(r.Context())
-	reply, err := h.chatService.Reply(r.Context(), userID, req.Message)
+	reply, session, err := h.chatService.Reply(r.Context(), userID, req.SessionID, req.Message)
 	if err != nil {
 		writeJSON(w, http.StatusBadRequest, model.ErrorEnvelope{
 			Error: model.ErrorBody{Message: err.Error()},
@@ -61,7 +62,8 @@ func (h *ChatHandler) PostChat(w http.ResponseWriter, r *http.Request) {
 				},
 			},
 		},
-		Usage: reply.Usage,
+		Usage:   reply.Usage,
+		Session: &session,
 	}
 
 	writeJSON(w, http.StatusOK, resp)
@@ -94,13 +96,18 @@ func (h *ChatHandler) postChatStream(w http.ResponseWriter, r *http.Request, req
 	}
 
 	userID := middleware.UserIDFromContext(r.Context())
-	reply, err := h.chatService.StreamReply(r.Context(), userID, req.Message, func(delta model.AssistantReplyDelta) error {
-		return sendEvent(map[string]string{
-			"type":              "delta",
-			"content":           delta.Content,
-			"reasoning_content": delta.ReasoningContent,
+	reply, session, err := h.chatService.StreamReply(
+		r.Context(),
+		userID,
+		req.SessionID,
+		req.Message,
+		func(delta model.AssistantReplyDelta) error {
+			return sendEvent(map[string]string{
+				"type":              "delta",
+				"content":           delta.Content,
+				"reasoning_content": delta.ReasoningContent,
+			})
 		})
-	})
 	if err != nil {
 		_ = sendEvent(map[string]string{
 			"type":  "error",
@@ -114,6 +121,60 @@ func (h *ChatHandler) postChatStream(w http.ResponseWriter, r *http.Request, req
 		"content":           reply.Content,
 		"reasoning_content": reply.ReasoningContent,
 		"usage":             reply.Usage,
+		"session":           session,
+	})
+}
+
+func (h *ChatHandler) GetSessions(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodGet {
+		writeJSON(w, http.StatusMethodNotAllowed, model.ErrorEnvelope{
+			Error: model.ErrorBody{Message: "method not allowed"},
+		})
+		return
+	}
+	userID := middleware.UserIDFromContext(r.Context())
+	sessions, err := h.chatService.ListSessions(r.Context(), userID)
+	if err != nil {
+		writeJSON(w, http.StatusBadRequest, model.ErrorEnvelope{
+			Error: model.ErrorBody{Message: err.Error()},
+		})
+		return
+	}
+	writeJSON(w, http.StatusOK, model.ChatSessionListResponse{Sessions: sessions})
+}
+
+func (h *ChatHandler) GetSessionDetail(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodGet {
+		writeJSON(w, http.StatusMethodNotAllowed, model.ErrorEnvelope{
+			Error: model.ErrorBody{Message: "method not allowed"},
+		})
+		return
+	}
+	rawID := strings.TrimPrefix(r.URL.Path, "/api/chat/sessions/")
+	sessionID, err := strconv.ParseInt(strings.TrimSpace(rawID), 10, 64)
+	if err != nil || sessionID <= 0 {
+		writeJSON(w, http.StatusBadRequest, model.ErrorEnvelope{
+			Error: model.ErrorBody{Message: "invalid session id"},
+		})
+		return
+	}
+
+	userID := middleware.UserIDFromContext(r.Context())
+	session, messages, err := h.chatService.GetSessionDetail(r.Context(), userID, sessionID)
+	if err != nil {
+		status := http.StatusBadRequest
+		if strings.Contains(strings.ToLower(err.Error()), "not found") {
+			status = http.StatusNotFound
+		}
+		writeJSON(w, status, model.ErrorEnvelope{
+			Error: model.ErrorBody{Message: err.Error()},
+		})
+		return
+	}
+
+	writeJSON(w, http.StatusOK, model.ChatSessionDetailResponse{
+		Session:  session,
+		Messages: messages,
 	})
 }
 

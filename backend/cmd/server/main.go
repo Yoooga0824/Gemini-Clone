@@ -48,11 +48,12 @@ func main() {
 
 	userRepo := repository.NewUserRepository(db)
 	usageRepo := repository.NewUsageRepository(db)
+	chatRepo := repository.NewChatRepository(db)
 
 	authService := service.NewAuthService(userRepo, cfg.JWTSecret, cfg.JWTExpiryHours)
 	userService := service.NewUserService(userRepo)
 	usageService := service.NewUsageService(usageRepo)
-	chatService := service.NewChatService(llmClient, usageService, cfg.UpstreamModel)
+	chatService := service.NewChatService(llmClient, chatRepo, usageService, cfg.UpstreamModel)
 
 	authHandler := handlers.NewAuthHandler(authService)
 	userHandler := handlers.NewUserHandler(userService, cfg.AvatarUploadDir, cfg.AvatarMaxBytes)

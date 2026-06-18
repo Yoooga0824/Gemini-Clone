@@ -30,7 +30,9 @@ func NewRouter(
 	mux.HandleFunc("/api/me", middleware.RequireAuth(jwtSecret, routeMethods(userHandler.GetMe, userHandler.PatchMe)))
 	mux.HandleFunc("/api/me/avatar", middleware.RequireAuth(jwtSecret, userHandler.PostAvatar))
 	mux.HandleFunc("/api/usage", middleware.RequireAuth(jwtSecret, usageHandler.GetUsageSummary))
-	mux.HandleFunc("/api/chat", chatHandler.PostChat)
+	mux.HandleFunc("/api/chat", middleware.RequireAuth(jwtSecret, chatHandler.PostChat))
+	mux.HandleFunc("/api/chat/sessions", middleware.RequireAuth(jwtSecret, chatHandler.GetSessions))
+	mux.HandleFunc("/api/chat/sessions/", middleware.RequireAuth(jwtSecret, chatHandler.GetSessionDetail))
 	mux.Handle("/uploads/", http.StripPrefix("/uploads/", http.FileServer(http.Dir(filepath.Clean(uploadsRoot)))))
 
 	return withCORS(mux, allowedOrigin)

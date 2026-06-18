@@ -63,7 +63,9 @@ hljs.configure({
 });
 
 const API_REQUEST_URL = config.BACKEND_API_URL;
+const CHAT_SESSIONS_URL = config.CHAT_SESSIONS_URL;
 const AUTH_TOKEN_STORAGE_KEY = "authToken";
+const MAX_CLOUD_SESSIONS = 30;
 const promptInput = messageForm.querySelector(".prompt__form-input");
 const themeRoot = document.documentElement;
 const headerTypingTitle = document.querySelector(".header__typing-title");
@@ -188,6 +190,10 @@ const applyUserProfileToUI = () => {
 const logout = () => {
   authToken = "";
   currentUser = null;
+  chatSessions = [createSession("新聊天")];
+  activeSessionId = chatSessions[0].id;
+  renderSidebarSessions();
+  renderActiveSessionMessages();
   localStorage.removeItem(AUTH_TOKEN_STORAGE_KEY);
   applyUserProfileToUI();
   closeModal(profileModal);
@@ -681,6 +687,29 @@ const getSessionTitleFromText = (text = "") => {
   return normalized.length > 18 ? `${normalized.slice(0, 18)}...` : normalized;
 };
 
+const createSession = (title = "新聊天", options = {}) => ({
+  id: options.id || `local-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`,
+  title,
+  messages: options.messages || [],
+  loaded: options.loaded ?? true,
+});
+
+const normalizeServerSession = (session = {}) =>
+  createSession(session.title || "新聊天", {
+    id: String(session.id),
+    messages: [],
+    loaded: false,
+  });
+
+const getActiveSession = () =>
+  chatSessions.find((session) => session.id === activeSessionId) || null;
+
+const getPersistedSessionId = (sessionId = "") => {
+  const numericId = Number(sessionId);
+  if (!Number.isFinite(numericId) || numericId <= 0) return null;
+  return Math.trunc(numericId);
+};
+
 const renderSidebarSessions = () => {
   if (!sidebarHistory) return;
   sidebarHistory.innerHTML = chatSessions
@@ -706,17 +735,184 @@ const setActiveSession = (sessionId) => {
   renderSidebarSessions();
 };
 
-const createSession = (title = "新聊天") => ({
-  id: `session-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`,
-  title,
-});
-
 const updateActiveSessionTitle = (nextTitle) => {
   if (!activeSessionId || !nextTitle) return;
   chatSessions = chatSessions.map((session) =>
     session.id === activeSessionId ? { ...session, title: nextTitle } : session
   );
   renderSidebarSessions();
+};
+
+const appendMessageToActiveSession = (message) => {
+  if (!activeSessionId || !message) return;
+  chatSessions = chatSessions.map((session) => {
+    if (session.id !== activeSessionId) return session;
+    return {
+      ...session,
+      messages: [...(session.messages || []), message],
+      loaded: true,
+    };
+  });
+};
+
+const appendAssistantToActiveSession = (content = "", reasoning = "") => {
+  appendMessageToActiveSession({
+    role: "assistant",
+    content,
+    reasoning_content: reasoning,
+  });
+};
+
+const syncActiveSessionFromServer = (serverSession = null) => {
+  if (!serverSession?.id) return;
+  const nextId = String(serverSession.id);
+  const currentActiveId = activeSessionId;
+  if (!currentActiveId) return;
+
+  const exists = chatSessions.some((session) => session.id === nextId);
+  chatSessions = chatSessions.map((session) => {
+    if (session.id !== currentActiveId) return session;
+    return {
+      ...session,
+      id: nextId,
+      title: serverSession.title || session.title,
+      loaded: true,
+    };
+  });
+  if (currentActiveId !== nextId && exists) {
+    chatSessions = chatSessions.filter((session) => session.id !== currentActiveId);
+  }
+  activeSessionId = nextId;
+  renderSidebarSessions();
+};
+
+const renderOutgoingMessage = (text) => {
+  const outgoingAvatarSrc = normalizeAvatarUrl(currentUser?.avatar_url || "");
+  const outgoingMessageHtml = `
+        <div class="message__content">
+            <img class="message__avatar" src="${outgoingAvatarSrc}" alt="User avatar">
+            <div class="message__text"></div>
+        </div>
+    `;
+  const outgoingMessageElement = createChatMessageElement(
+    outgoingMessageHtml,
+    "message--outgoing"
+  );
+  outgoingMessageElement.querySelector(".message__text").innerText = text || "";
+  chatHistoryContainer.appendChild(outgoingMessageElement);
+};
+
+const createIncomingMessageHtml = () => `
+        <div class="message__content">
+            <img class="message__avatar" src="assets/YoooFind.png" alt="Gemini avatar">
+            <div class="message__body">
+                <div class="message__reasoning hide">
+                    <div class="message__reasoning-header">
+                        <div class="message__reasoning-title">深度思考</div>
+                    </div>
+                    <div class="message__reasoning-text"></div>
+                </div>
+                <div class="message__text"></div>
+            </div>
+        </div>
+        <div class="message__actions">
+            <button type="button" class="message__action-btn" data-action="copy" title="复制"><i class='bx bx-copy-alt'></i></button>
+            <button type="button" class="message__action-btn" data-action="like" title="点赞"><i class='bx bx-like'></i></button>
+            <button type="button" class="message__action-btn" data-action="dislike" title="点踩"><i class='bx bx-dislike'></i></button>
+            <button type="button" class="message__action-btn" data-action="retry" title="重试"><i class='bx bx-refresh'></i></button>
+        </div>
+    `;
+
+const renderAssistantMessage = (content = "", reasoning = "") => {
+  const incomingMessageElement = createChatMessageElement(
+    createIncomingMessageHtml(),
+    "message--incoming"
+  );
+  chatHistoryContainer.appendChild(incomingMessageElement);
+  const messageTextElement = incomingMessageElement.querySelector(".message__text");
+  const parsedResponse = marked.parse(content || "");
+  showTypingEffect(
+    content || "",
+    parsedResponse,
+    messageTextElement,
+    incomingMessageElement,
+    true,
+    reasoning || ""
+  );
+};
+
+const renderActiveSessionMessages = () => {
+  const session = getActiveSession();
+  resetChatCanvas();
+  if (!session || !Array.isArray(session.messages)) return;
+  session.messages.forEach((message) => {
+    if (message.role === "assistant") {
+      renderAssistantMessage(message.content || "", message.reasoning_content || "");
+      return;
+    }
+    renderOutgoingMessage(message.content || "");
+  });
+  if (session.messages.length > 0) {
+    document.body.classList.add("hide-header");
+  }
+  scrollChatsToBottom("auto", true);
+};
+
+const fetchSessionMessages = async (sessionId) => {
+  const persistedId = getPersistedSessionId(sessionId);
+  if (!persistedId) {
+    renderActiveSessionMessages();
+    return;
+  }
+  const response = await authFetch(`${CHAT_SESSIONS_URL}/${persistedId}`, { method: "GET" });
+  if (response.status === 401) {
+    logout();
+    return;
+  }
+  if (!response.ok) {
+    throw new Error(await parseErrorMessage(response, "加载会话失败"));
+  }
+  const data = await response.json();
+  const messages = Array.isArray(data?.messages) ? data.messages : [];
+  chatSessions = chatSessions.map((session) =>
+    session.id === String(persistedId)
+      ? {
+        ...session,
+        title: data?.session?.title || session.title,
+        messages,
+        loaded: true,
+      }
+      : session
+  );
+  renderSidebarSessions();
+  if (activeSessionId === String(persistedId)) {
+    renderActiveSessionMessages();
+  }
+};
+
+const loadRemoteChatSessions = async () => {
+  if (!authToken) return;
+  const response = await authFetch(CHAT_SESSIONS_URL, { method: "GET" });
+  if (response.status === 401) {
+    logout();
+    return;
+  }
+  if (!response.ok) {
+    throw new Error(await parseErrorMessage(response, "加载历史会话失败"));
+  }
+  const data = await response.json();
+  const sessions = (Array.isArray(data?.sessions) ? data.sessions : [])
+    .slice(0, MAX_CLOUD_SESSIONS)
+    .map((session) => normalizeServerSession(session));
+  if (sessions.length === 0) {
+    chatSessions = [createSession("新聊天")];
+    setActiveSession(chatSessions[0].id);
+    renderActiveSessionMessages();
+    return;
+  }
+  chatSessions = sessions;
+  setActiveSession(chatSessions[0].id);
+  await fetchSessionMessages(activeSessionId);
 };
 
 const resetChatCanvas = () => {
@@ -737,7 +933,7 @@ const handleCreateNewChat = () => {
   const isAlreadyFreshChat =
     !!currentSession &&
     currentSession.title === "新聊天" &&
-    chatHistoryContainer.children.length === 0;
+    (currentSession.messages || []).length === 0;
   if (isAlreadyFreshChat) {
     if (isMobileViewport()) closeSidebarDrawer();
     return;
@@ -792,6 +988,14 @@ const handleAuthSubmit = async (event) => {
   }
   localStorage.setItem(AUTH_TOKEN_STORAGE_KEY, authToken);
   applyUserProfileToUI();
+  try {
+    await loadRemoteChatSessions();
+  } catch (error) {
+    console.warn("Failed to load cloud chat sessions:", error);
+    chatSessions = [createSession("新聊天")];
+    setActiveSession(chatSessions[0].id);
+    renderActiveSessionMessages();
+  }
   authForm?.reset();
   closeModal(authModal);
   setAuthStatusText("");
@@ -980,6 +1184,12 @@ const bindSidebarEvents = () => {
     const { sessionId } = sessionButton.dataset;
     if (!sessionId) return;
     setActiveSession(sessionId);
+    const selectedSession = chatSessions.find((session) => session.id === sessionId);
+    if (selectedSession?.loaded) {
+      renderActiveSessionMessages();
+    } else {
+      void fetchSessionMessages(sessionId);
+    }
     if (isMobileViewport()) closeSidebarDrawer();
   });
 
@@ -1025,6 +1235,7 @@ const loadSavedChatHistory = () => {
   authToken = localStorage.getItem(AUTH_TOKEN_STORAGE_KEY) || "";
   currentUser = null;
   applyUserProfileToUI();
+  renderActiveSessionMessages();
 };
 
 
@@ -1112,6 +1323,7 @@ const consumeAssistantEventStream = async (
   let pendingTagPrefix = "";
   let streamStarted = false;
   let streamCompleted = false;
+  let resolvedSession = null;
   let contentTypewriterTimer = null;
   const CONTENT_TYPEWRITER_DELAY_MS = 16;
 
@@ -1307,6 +1519,7 @@ const consumeAssistantEventStream = async (
       if (eventData.type === "delta" || eventData.type === "done") {
         if (eventData.type === "done") {
           streamCompleted = true;
+          resolvedSession = eventData?.session || null;
           const finalParsed = extractReasoningAndContentFromMessage({
             content:
               typeof eventData.content === "string" ? eventData.content : visibleContent,
@@ -1385,6 +1598,11 @@ const consumeAssistantEventStream = async (
   actionsElement?.classList.remove("hide");
   isGeneratingResponse = false;
   scrollChatsToBottom("auto");
+  return {
+    content: visibleContent || "",
+    reasoning: visibleReasoning || "",
+    session: resolvedSession,
+  };
 };
 
 // Fetch API response based on user input
@@ -1402,6 +1620,7 @@ const requestApiResponse = async (incomingMessageElement) => {
   }
 
   try {
+    const sessionId = getPersistedSessionId(activeSessionId);
     const response = await authFetch(API_REQUEST_URL, {
       method: "POST",
       headers: {
@@ -1409,6 +1628,7 @@ const requestApiResponse = async (incomingMessageElement) => {
       },
       body: JSON.stringify({
         message: currentUserMessage,
+        ...(sessionId ? { session_id: sessionId } : {}),
       }),
     });
 
@@ -1434,11 +1654,13 @@ const requestApiResponse = async (incomingMessageElement) => {
     }
 
     if (responseContentType.includes("text/event-stream")) {
-      await consumeAssistantEventStream(
+      const streamResult = await consumeAssistantEventStream(
         response,
         messageTextElement,
         incomingMessageElement
       );
+      appendAssistantToActiveSession(streamResult?.content || "", streamResult?.reasoning || "");
+      syncActiveSessionFromServer(streamResult?.session || null);
       return;
     }
 
@@ -1461,8 +1683,8 @@ const requestApiResponse = async (incomingMessageElement) => {
       false,
       reasoningText
     );
-
-    // Chat history persistence is intentionally disabled.
+    appendAssistantToActiveSession(responseText, reasoningText);
+    syncActiveSessionFromServer(responseData?.session || null);
   } catch (error) {
     isGeneratingResponse = false;
     incomingMessageElement.classList.remove("message--loading");
@@ -1591,24 +1813,8 @@ const handleOutgoingMessage = async () => {
   }
   updateActiveSessionTitle(getSessionTitleFromText(outgoingText));
   currentUserMessage = await buildMessageWithAttachments(inputText, activeAttachments);
-  const outgoingAvatarSrc = normalizeAvatarUrl(currentUser?.avatar_url || "");
-
-  const outgoingMessageHtml = `
-
-        <div class="message__content">
-            <img class="message__avatar" src="${outgoingAvatarSrc}" alt="User avatar">
-            <div class="message__text"></div>
-        </div>
-
-    `;
-
-  const outgoingMessageElement = createChatMessageElement(
-    outgoingMessageHtml,
-    "message--outgoing"
-  );
-  outgoingMessageElement.querySelector(".message__text").innerText =
-    outgoingText;
-  chatHistoryContainer.appendChild(outgoingMessageElement);
+  appendMessageToActiveSession({ role: "user", content: outgoingText });
+  renderOutgoingMessage(outgoingText);
   scrollChatsToBottom("smooth");
 
   messageForm.reset(); // Clear input field
@@ -1831,5 +2037,12 @@ bindModalEvents();
 loadSavedChatHistory();
 adjustPromptInputHeight();
 if (authToken) {
-  void fetchCurrentUser();
+  void (async () => {
+    try {
+      await fetchCurrentUser();
+      await loadRemoteChatSessions();
+    } catch {
+      // Keep default local blank session when remote history fails.
+    }
+  })();
 }

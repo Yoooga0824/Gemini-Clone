@@ -7,6 +7,7 @@ const config = {
   ME_URL: "http://localhost:8080/api/me",
   AVATAR_UPLOAD_URL: "http://localhost:8080/api/me/avatar",
   USAGE_URL: "http://localhost:8080/api/usage",
+  CHAT_SESSIONS_URL: "http://localhost:8080/api/chat/sessions",
 };
 
 export default config;
