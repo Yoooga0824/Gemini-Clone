@@ -944,6 +944,21 @@ const handleCreateNewChat = () => {
     if (isMobileViewport()) closeSidebarDrawer();
     return;
   }
+  const existingFreshSession = chatSessions.find(
+    (session) => session.title === "新聊天" && (session.messages || []).length === 0
+  );
+  if (existingFreshSession) {
+    // Reuse the only empty "新聊天" session so the sidebar never shows duplicates.
+    chatSessions = [
+      existingFreshSession,
+      ...chatSessions.filter((session) => session.id !== existingFreshSession.id),
+    ];
+    setActiveSession(existingFreshSession.id);
+    resetChatCanvas();
+    if (isMobileViewport()) closeSidebarDrawer();
+    return;
+  }
+
   const newSession = createSession("新聊天");
   chatSessions = [newSession, ...chatSessions];
   setActiveSession(newSession.id);
