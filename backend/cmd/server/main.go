@@ -60,7 +60,7 @@ func main() {
 	for modelKey, client := range llmClients {
 		modelGenerators[modelKey] = client
 	}
-	chatService := service.NewChatService(modelGenerators, cfg.DefaultModelKey, chatRepo, usageService)
+	chatService := service.NewChatService(modelGenerators, cfg.ModelOrder, chatRepo, usageService)
 
 	authHandler := handlers.NewAuthHandler(authService)
 	userHandler := handlers.NewUserHandler(userService, cfg.AvatarUploadDir, cfg.AvatarMaxBytes)

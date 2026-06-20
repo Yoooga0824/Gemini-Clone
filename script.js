@@ -40,6 +40,7 @@ const modelPicker = document.getElementById("modelPicker");
 const modelPickerTrigger = document.getElementById("modelPickerTrigger");
 const modelPickerPanel = document.getElementById("modelPickerPanel");
 const modelPickerSummary = document.getElementById("modelPickerSummary");
+const modelPickerOptions = document.getElementById("modelPickerOptions");
 
 // State variables
 let currentUserMessage = null;
@@ -56,7 +57,7 @@ let usageChartDataCache = {
   recentSummary: null,
   totalSummary: null,
 };
-let selectedModelKeys = ["kimi"];
+let selectedModelKeys = ["mimo"];
 
 const MAX_ATTACHMENT_COUNT = 6;
 const MAX_ATTACHMENT_SIZE = 5 * 1024 * 1024;
@@ -94,12 +95,17 @@ const SHORT_CODE_BLOCK_MAX_CHARS = 72;
 const MOBILE_BREAKPOINT = 980;
 let shikiHighlighterPromise = null;
 const MAX_SELECTED_MODELS = 3;
-const MODEL_LABELS = {
-  deepseek: "DeepSeek",
-  doubao: "豆包",
-  kimi: "Kimi",
-  qwen: "千问",
-};
+const MODEL_CATALOG = [
+  { key: "deepseek", label: "DeepSeek" },
+  { key: "doubao", label: "豆包" },
+  { key: "kimi", label: "Kimi" },
+  { key: "qwen", label: "千问" },
+  { key: "mimo", label: "Mimo" },
+];
+const MODEL_LABELS = MODEL_CATALOG.reduce((labels, item) => {
+  labels[item.key] = item.label;
+  return labels;
+}, {});
 
 const SHIKI_LANGUAGES = [
   "javascript",
@@ -152,7 +158,7 @@ const normalizeModelSelection = (inputModels = []) => {
     seen.add(key);
     normalized.push(key);
   });
-  if (normalized.length === 0) return ["kimi"];
+  if (normalized.length === 0) return ["mimo"];
   return normalized.slice(0, MAX_SELECTED_MODELS);
 };
 
@@ -179,6 +185,20 @@ const setSelectedModels = (nextModels = []) => {
   renderModelPickerSummary();
   syncModelPickerCheckboxes();
   saveModelSelection();
+};
+
+const renderModelPickerOptions = () => {
+  if (!modelPickerOptions) return;
+  modelPickerOptions.innerHTML = MODEL_CATALOG
+    .map(
+      (item) => `
+        <label class="model-picker__option">
+          <input type="checkbox" value="${escapeHtml(item.key)}" data-model-option />
+          <span>${escapeHtml(item.label)}</span>
+        </label>
+      `
+    )
+    .join("");
 };
 
 const normalizeAvatarUrl = (rawUrl = "") => {
@@ -925,7 +945,7 @@ const pickModelResponse = (responses = [], preferredModel = "") => {
     if (matched) return matched;
   }
   return responses[0] || {
-    model: "kimi",
+    model: "mimo",
     content: "",
     reasoning_content: "",
   };
@@ -1606,7 +1626,7 @@ const bindModelPickerEvents = () => {
     } else {
       next = next.filter((item) => item !== option.value);
       if (next.length === 0) {
-        next = ["kimi"];
+        next = ["mimo"];
       }
     }
     setSelectedModels(next);
@@ -1645,7 +1665,7 @@ const loadSavedChatHistory = () => {
     const rawModels = JSON.parse(localStorage.getItem(MODEL_SELECTION_STORAGE_KEY) || "[]");
     setSelectedModels(rawModels);
   } catch {
-    setSelectedModels(["kimi"]);
+    setSelectedModels(["mimo"]);
   }
   currentUser = null;
   applyUserProfileToUI();
@@ -2077,7 +2097,7 @@ const requestApiResponse = async (incomingMessageElement, requestedModels = []) 
       );
       appendMessageToActiveSession({
         role: "assistant",
-        model: normalizedRequestedModels[0] || "kimi",
+        model: normalizedRequestedModels[0] || "mimo",
         content: streamResult?.content || "",
         reasoning_content: streamResult?.reasoning || "",
       });
@@ -2092,7 +2112,7 @@ const requestApiResponse = async (incomingMessageElement, requestedModels = []) 
         const responseMessage = choice?.message || {};
         const parsed = extractReasoningAndContentFromMessage(responseMessage);
         return {
-          model: String(responseMessage?.model || normalizedRequestedModels[index] || normalizedRequestedModels[0] || "kimi")
+          model: String(responseMessage?.model || normalizedRequestedModels[index] || normalizedRequestedModels[0] || "mimo")
             .trim()
             .toLowerCase(),
           content: parsed.content || "",
@@ -2492,6 +2512,7 @@ messageForm.addEventListener("submit", (e) => {
 playHeaderTypingAnimation();
 bindSidebarEvents();
 bindModalEvents();
+renderModelPickerOptions();
 bindModelPickerEvents();
 loadSavedChatHistory();
 adjustPromptInputHeight();

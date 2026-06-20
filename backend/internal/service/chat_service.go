@@ -34,27 +34,36 @@ type ChatStore interface {
 
 type ChatService struct {
 	generators   map[string]Generator
-	defaultModel string
+	modelOrder   []string
 	store        ChatStore
 	usageService *UsageService
 }
 
 func NewChatService(
 	generators map[string]Generator,
-	defaultModel string,
+	modelOrder []string,
 	store ChatStore,
 	usageService *UsageService,
 ) *ChatService {
-	defaultKey := strings.TrimSpace(strings.ToLower(defaultModel))
-	if defaultKey == "" {
-		for key := range generators {
-			defaultKey = key
-			break
+	normalizedOrder := make([]string, 0, len(modelOrder))
+	seen := map[string]struct{}{}
+	for _, item := range modelOrder {
+		key := strings.ToLower(strings.TrimSpace(item))
+		if key == "" {
+			continue
 		}
+		if _, ok := generators[key]; !ok {
+			continue
+		}
+		if _, ok := seen[key]; ok {
+			continue
+		}
+		seen[key] = struct{}{}
+		normalizedOrder = append(normalizedOrder, key)
 	}
 	return &ChatService{
 		generators:   generators,
-		defaultModel: defaultKey,
+		modelOrder:   normalizedOrder,
 		store:        store,
 		usageService: usageService,
 	}
@@ -292,9 +301,10 @@ func (s *ChatService) normalizeRequestedModels(input []string) ([]string, error)
 	if len(models) > 0 {
 		return models, nil
 	}
-	defaultKey := strings.TrimSpace(strings.ToLower(s.defaultModel))
-	if _, ok := s.generators[defaultKey]; ok {
-		return []string{defaultKey}, nil
+	for _, key := range s.modelOrder {
+		if _, ok := s.generators[key]; ok {
+			return []string{key}, nil
+		}
 	}
 	for key := range s.generators {
 		return []string{key}, nil

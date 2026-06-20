@@ -11,10 +11,10 @@ type Config struct {
 	ServerPort    string
 	AllowedOrigin string
 
-	DefaultModelKey string
-	ModelProviders  map[string]ProviderConfig
-	MaxTokens       int
-	Temperature     float64
+	ModelProviders map[string]ProviderConfig
+	ModelOrder     []string
+	MaxTokens      int
+	Temperature    float64
 
 	MySQLDSN        string
 	JWTSecret       string
@@ -30,11 +30,56 @@ type ProviderConfig struct {
 	Model   string
 }
 
+type ProviderBlueprint struct {
+	Key            string
+	EnvPrefix      string
+	DefaultBaseURL string
+	DefaultPath    string
+	DefaultModel   string
+}
+
+var providerCatalog = []ProviderBlueprint{
+	{
+		Key:            "deepseek",
+		EnvPrefix:      "DEEPSEEK",
+		DefaultBaseURL: "https://api.deepseek.com",
+		DefaultPath:    "/v1/chat/completions",
+		DefaultModel:   "deepseek-chat",
+	},
+	{
+		Key:            "doubao",
+		EnvPrefix:      "DOUBAO",
+		DefaultBaseURL: "https://ark.cn-beijing.volces.com/api/v3",
+		DefaultPath:    "/chat/completions",
+		DefaultModel:   "",
+	},
+	{
+		Key:            "kimi",
+		EnvPrefix:      "KIMI",
+		DefaultBaseURL: "https://api.moonshot.cn",
+		DefaultPath:    "/v1/chat/completions",
+		DefaultModel:   "moonshot-v1-8k",
+	},
+	{
+		Key:            "qwen",
+		EnvPrefix:      "QWEN",
+		DefaultBaseURL: "https://dashscope.aliyuncs.com/compatible-mode",
+		DefaultPath:    "/v1/chat/completions",
+		DefaultModel:   "qwen-plus",
+	},
+	{
+		Key:            "mimo",
+		EnvPrefix:      "MIMO",
+		DefaultBaseURL: "",
+		DefaultPath:    "/v1/chat/completions",
+		DefaultModel:   "mimo-v2.5-pro",
+	},
+}
+
 func Load() (Config, error) {
 	cfg := Config{
 		ServerPort:      getEnv("SERVER_PORT", "8080"),
 		AllowedOrigin:   getEnv("ALLOWED_ORIGIN", "http://localhost:3000"),
-		DefaultModelKey: strings.ToLower(strings.TrimSpace(getEnv("DEFAULT_CHAT_MODEL", "kimi"))),
 		MaxTokens:       getEnvInt("UPSTREAM_MAX_TOKENS", 2048),
 		Temperature:     getEnvFloat("UPSTREAM_TEMPERATURE", 0.7),
 		MySQLDSN:        strings.TrimSpace(getEnv("MYSQL_DSN", "")),
@@ -44,12 +89,9 @@ func Load() (Config, error) {
 		AvatarMaxBytes:  getEnvInt64("AVATAR_MAX_BYTES", 3*1024*1024),
 	}
 
-	cfg.ModelProviders = loadProviderConfigs()
+	cfg.ModelProviders, cfg.ModelOrder = loadProviderConfigs()
 	if len(cfg.ModelProviders) == 0 {
 		return Config{}, fmt.Errorf("at least one provider API key is required")
-	}
-	if _, ok := cfg.ModelProviders[cfg.DefaultModelKey]; !ok {
-		cfg.DefaultModelKey = firstAvailableModel(cfg.ModelProviders)
 	}
 	if cfg.MySQLDSN == "" {
 		return Config{}, fmt.Errorf("MYSQL_DSN is required")
@@ -69,49 +111,28 @@ func getEnv(key, fallback string) string {
 	return v
 }
 
-func loadProviderConfigs() map[string]ProviderConfig {
+func loadProviderConfigs() (map[string]ProviderConfig, []string) {
 	providers := map[string]ProviderConfig{}
-	register := func(key, envPrefix, defaultBaseURL, defaultModel string) {
-		apiKey := strings.TrimSpace(getEnv(envPrefix+"_API_KEY", ""))
+	order := make([]string, 0, len(providerCatalog))
+	register := func(spec ProviderBlueprint) {
+		apiKey := strings.TrimSpace(getEnv(spec.EnvPrefix+"_API_KEY", ""))
 		if apiKey == "" {
 			return
 		}
+		key := strings.ToLower(strings.TrimSpace(spec.Key))
 		providers[key] = ProviderConfig{
-			BaseURL: strings.TrimSpace(getEnv(envPrefix+"_BASE_URL", defaultBaseURL)),
-			Path:    strings.TrimSpace(getEnv(envPrefix+"_API_PATH", "/v1/chat/completions")),
+			BaseURL: strings.TrimSpace(getEnv(spec.EnvPrefix+"_BASE_URL", spec.DefaultBaseURL)),
+			Path:    strings.TrimSpace(getEnv(spec.EnvPrefix+"_API_PATH", spec.DefaultPath)),
 			APIKey:  apiKey,
-			Model:   strings.TrimSpace(getEnv(envPrefix+"_MODEL", defaultModel)),
+			Model:   strings.TrimSpace(getEnv(spec.EnvPrefix+"_MODEL", spec.DefaultModel)),
 		}
+		order = append(order, key)
 	}
 
-	register("deepseek", "DEEPSEEK", "https://api.deepseek.com", "deepseek-chat")
-	register("doubao", "DOUBAO", "https://ark.cn-beijing.volces.com/api/v3", "")
-	register("kimi", "KIMI", "https://api.moonshot.cn", "moonshot-v1-8k")
-	register("qwen", "QWEN", "https://dashscope.aliyuncs.com/compatible-mode", "qwen-plus")
-
-	legacyAPIKey := strings.TrimSpace(getEnv("UPSTREAM_API_KEY", ""))
-	if legacyAPIKey != "" && len(providers) == 0 {
-		providers["kimi"] = ProviderConfig{
-			BaseURL: strings.TrimSpace(getEnv("UPSTREAM_BASE_URL", "https://api.deepseek.com")),
-			Path:    strings.TrimSpace(getEnv("UPSTREAM_PATH", "/v1/chat/completions")),
-			APIKey:  legacyAPIKey,
-			Model:   strings.TrimSpace(getEnv("UPSTREAM_MODEL", "deepseek-chat")),
-		}
+	for _, item := range providerCatalog {
+		register(item)
 	}
-	return providers
-}
-
-func firstAvailableModel(items map[string]ProviderConfig) string {
-	priority := []string{"kimi", "deepseek", "qwen", "doubao"}
-	for _, key := range priority {
-		if _, ok := items[key]; ok {
-			return key
-		}
-	}
-	for key := range items {
-		return key
-	}
-	return "kimi"
+	return providers, order
 }
 
 func getEnvInt(key string, fallback int) int {
