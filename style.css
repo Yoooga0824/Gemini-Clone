@@ -861,8 +861,8 @@ body:not(.sidebar-collapsed) .sidebar__brand{
 }
 
 .light_mode .app-sidebar{
-    background: #eef3f9;
-    box-shadow: inset -1px 0 0 rgba(30, 58, 95, 0.12);
+    background: #f4f5f8;
+    box-shadow: inset -1px 0 0 rgba(15, 23, 42, 0.08);
 }
 
 .light_mode .sidebar__new-chat-btn,
@@ -880,12 +880,12 @@ body:not(.sidebar-collapsed) .sidebar__brand{
 .light_mode .sidebar__session:hover,
 .light_mode .sidebar__collapse-btn:hover,
 .light_mode .sidebar__expand-btn:hover{
-    background: #dbe6f3;
+    background: rgba(36, 50, 68, 0.06);
     color: #121a26;
 }
 
 .light_mode .sidebar__session.is-active{
-    background: #c8daf1;
+    background: rgba(74, 144, 226, 0.08);
     color: #10233b;
 }
 
