@@ -1691,7 +1691,16 @@ body.sidebar-collapsed .sidebar__brand:hover .sidebar__expand-btn{
 
 .profile-action-row{
     display: flex;
+    justify-content: flex-end;
     gap: 0.7rem;
+    margin-top: 0.95rem;
+    padding-top: 0.85rem;
+    border-top: 1px solid color-mix(in srgb, var(--secondary-hover-color) 60%, transparent);
+}
+
+.profile-action-row .modal-primary-btn,
+.profile-action-row .modal-secondary-btn{
+    min-width: 112px;
 }
 
 .profile-usage-card{
@@ -1734,6 +1743,13 @@ body.sidebar-collapsed .sidebar__brand:hover .sidebar__expand-btn{
 .usage-toggle-btn.is-active{
     background: linear-gradient(135deg, #3b82f6 0%, #8b5cf6 60%, #ec4899 100%);
     color: #ffffff;
+}
+
+@media (max-width: 560px){
+    .profile-action-row{
+        flex-direction: column;
+        align-items: stretch;
+    }
 }
 
 .usage-chart-frame{

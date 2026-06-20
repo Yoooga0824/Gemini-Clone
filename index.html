@@ -290,12 +290,7 @@
             <span>个人简述</span>
             <textarea id="profileBio" rows="3" maxlength="300" placeholder="介绍一下自己"></textarea>
           </label>
-          <div class="profile-action-row">
-            <button type="submit" class="modal-primary-btn">保存资料</button>
-            <button type="button" class="modal-secondary-btn" id="logoutButton">退出登录</button>
-          </div>
         </form>
-        <div class="modal-status" id="profileStatus"></div>
         <section class="profile-usage-card" aria-label="Token 使用统计">
           <h3 class="modal-title profile-usage-title">Token 使用统计</h3>
           <p class="modal-subtitle">可切换查看近30天与历史累计</p>
@@ -308,6 +303,11 @@
             <canvas id="usageChartCanvas" width="560" height="380"></canvas>
           </div>
         </section>
+        <div class="profile-action-row">
+          <button type="submit" form="profileForm" class="modal-primary-btn">保存资料</button>
+          <button type="button" class="modal-secondary-btn" id="logoutButton">退出登录</button>
+        </div>
+        <div class="modal-status" id="profileStatus"></div>
       </div>
     </div>
     <!-- <p class="prompt__disclaim">
