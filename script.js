@@ -908,15 +908,17 @@ const loadRemoteChatSessions = async () => {
   const sessions = (Array.isArray(data?.sessions) ? data.sessions : [])
     .slice(0, MAX_CLOUD_SESSIONS)
     .map((session) => normalizeServerSession(session));
+  const freshSession = createSession("新聊天");
   if (sessions.length === 0) {
-    chatSessions = [createSession("新聊天")];
+    chatSessions = [freshSession];
     setActiveSession(chatSessions[0].id);
     renderActiveSessionMessages();
     return;
   }
-  chatSessions = sessions;
-  setActiveSession(chatSessions[0].id);
-  await fetchSessionMessages(activeSessionId);
+  // Always land on a fresh chat after reload/login, while keeping history available in sidebar.
+  chatSessions = [freshSession, ...sessions];
+  setActiveSession(freshSession.id);
+  renderActiveSessionMessages();
 };
 
 const resetChatCanvas = () => {
