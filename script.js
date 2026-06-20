@@ -77,6 +77,7 @@ const API_REQUEST_URL = config.BACKEND_API_URL;
 const CHAT_SESSIONS_URL = config.CHAT_SESSIONS_URL;
 const AUTH_TOKEN_STORAGE_KEY = "authToken";
 const MODEL_SELECTION_STORAGE_KEY = "selectedModels";
+const USER_PROFILE_STORAGE_KEY = "cachedUserProfile";
 const MAX_CLOUD_SESSIONS = 30;
 const promptInput = messageForm.querySelector(".prompt__form-input");
 const themeRoot = document.documentElement;
@@ -207,6 +208,45 @@ const normalizeAvatarUrl = (rawUrl = "") => {
   return `${config.BACKEND_BASE_URL}${rawUrl}`;
 };
 
+const normalizeComparableUrl = (url = "") => {
+  try {
+    return new URL(url, window.location.href).href;
+  } catch {
+    return String(url || "");
+  }
+};
+
+const setImageSourceIfChanged = (imageElement, nextSrc) => {
+  if (!imageElement) return;
+  const next = String(nextSrc || "");
+  const current = String(imageElement.getAttribute("src") || "");
+  if (normalizeComparableUrl(current) === normalizeComparableUrl(next)) return;
+  imageElement.src = next;
+};
+
+const getCachedUserProfile = () => {
+  try {
+    const raw = localStorage.getItem(USER_PROFILE_STORAGE_KEY);
+    if (!raw) return null;
+    const parsed = JSON.parse(raw);
+    if (!parsed || typeof parsed !== "object") return null;
+    return parsed;
+  } catch {
+    return null;
+  }
+};
+
+const persistCurrentUserProfile = () => {
+  if (!currentUser || typeof currentUser !== "object") return;
+  const profile = {
+    display_name: currentUser.display_name || "",
+    full_name: currentUser.full_name || "",
+    bio: currentUser.bio || "",
+    avatar_url: currentUser.avatar_url || "",
+  };
+  localStorage.setItem(USER_PROFILE_STORAGE_KEY, JSON.stringify(profile));
+};
+
 const authFetch = async (url, options = {}) => {
   const headers = {
     ...(options.headers || {}),
@@ -261,8 +301,8 @@ const applyUserProfileToUI = () => {
     sidebarUserLabel.textContent = isLoggedIn ? (currentUser.display_name || "用户") : "登录";
   }
   const avatarUrl = isLoggedIn ? normalizeAvatarUrl(currentUser.avatar_url) : "assets/profile.png";
-  if (sidebarUserAvatar) sidebarUserAvatar.src = avatarUrl;
-  if (profileAvatarPreview) profileAvatarPreview.src = avatarUrl;
+  setImageSourceIfChanged(sidebarUserAvatar, avatarUrl);
+  setImageSourceIfChanged(profileAvatarPreview, avatarUrl);
 };
 
 const logout = () => {
@@ -273,6 +313,7 @@ const logout = () => {
   renderSidebarSessions();
   renderActiveSessionMessages();
   localStorage.removeItem(AUTH_TOKEN_STORAGE_KEY);
+  localStorage.removeItem(USER_PROFILE_STORAGE_KEY);
   applyUserProfileToUI();
   closeModal(profileModal);
   setAuthMode("login");
@@ -1226,6 +1267,7 @@ const fetchCurrentUser = async () => {
     throw new Error(await parseErrorMessage(response, "获取用户信息失败"));
   }
   currentUser = await response.json();
+  persistCurrentUserProfile();
   applyUserProfileToUI();
   return currentUser;
 };
@@ -1299,6 +1341,7 @@ const handleAuthSubmit = async (event) => {
     return;
   }
   localStorage.setItem(AUTH_TOKEN_STORAGE_KEY, authToken);
+  persistCurrentUserProfile();
   applyUserProfileToUI();
   try {
     await loadRemoteChatSessions();
@@ -1359,6 +1402,7 @@ const handleProfileSubmit = async (event) => {
     return;
   }
   currentUser = await response.json();
+  persistCurrentUserProfile();
   applyUserProfileToUI();
   setProfileStatusText("已保存");
 };
@@ -1381,6 +1425,7 @@ const handleAvatarUpload = async (event) => {
     return;
   }
   currentUser = await response.json();
+  persistCurrentUserProfile();
   applyUserProfileToUI();
   setProfileStatusText("头像已更新");
   avatarInput.value = "";
@@ -1713,7 +1758,7 @@ const loadSavedChatHistory = () => {
   } catch {
     setSelectedModels(["mimo"]);
   }
-  currentUser = null;
+  currentUser = authToken ? getCachedUserProfile() : null;
   applyUserProfileToUI();
   renderActiveSessionMessages();
 };
