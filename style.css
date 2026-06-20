@@ -822,16 +822,16 @@ body.hide-header .prompt{
 .sidebar__new-chat-btn,
 .sidebar__settings-btn,
 .sidebar__user-card{
-    width: var(--sidebar-action-size);
+    width: 100%;
     height: var(--sidebar-action-size);
     min-height: var(--sidebar-action-size);
     border: none;
     border-radius: 8px;
     display: inline-flex;
     align-items: center;
-    justify-content: center;
-    gap: 0;
-    padding: 0;
+    justify-content: flex-start;
+    gap: 8px;
+    padding: 0 10px;
     background: transparent;
     color: var(--text-color);
     cursor: pointer;
@@ -908,10 +908,10 @@ body.hide-header .prompt{
     color: var(--text-secondary-color);
     display: inline-flex;
     align-items: center;
-    gap: 0;
+    gap: 8px;
     min-height: var(--sidebar-action-size);
-    padding: 0;
-    justify-content: center;
+    padding: 0 10px;
+    justify-content: flex-start;
     cursor: pointer;
     transition: background 0.25s ease, color 0.25s ease;
 }
@@ -990,8 +990,8 @@ body:not(.sidebar-collapsed) .sidebar__session{
 }
 
 .sidebar__user-avatar{
-    width: calc(var(--sidebar-action-size) * 0.6667);
-    height: calc(var(--sidebar-action-size) * 0.6667);
+    width: var(--sidebar-icon-size);
+    height: var(--sidebar-icon-size);
     border-radius: 50%;
     object-fit: cover;
 }
@@ -1054,11 +1054,6 @@ body.sidebar-collapsed .sidebar__session-title{
     pointer-events: none;
 }
 
-.sidebar__settings-btn .sidebar__label,
-.sidebar__user-card .sidebar__label{
-    display: none;
-}
-
 .sidebar__settings-btn .sidebar__label{
     color: var(--text-secondary-color);
     font-size: 0.88rem;
@@ -1087,11 +1082,6 @@ body:not(.sidebar-collapsed) .sidebar__user-card{
     gap: 8px;
     padding: 0 10px;
     text-align: left;
-}
-
-body:not(.sidebar-collapsed) .sidebar__settings-btn .sidebar__label,
-body:not(.sidebar-collapsed) .sidebar__user-card .sidebar__label{
-    display: inline;
 }
 
 body.sidebar-collapsed .sidebar__section-title{
@@ -1136,8 +1126,8 @@ body.sidebar-collapsed .sidebar__history{
 body.sidebar-collapsed .sidebar__settings-btn,
 body.sidebar-collapsed .sidebar__user-card,
 body.sidebar-collapsed .sidebar__session{
-    justify-content: center;
-    padding: 0;
+    justify-content: flex-start;
+    padding: 0 10px;
 }
 
 body.sidebar-collapsed .sidebar__brand{
@@ -1149,11 +1139,7 @@ body.sidebar-collapsed .sidebar__brand{
 }
 
 body.sidebar-collapsed .sidebar__new-chat-btn{
-    width: 100%;
     margin: 0;
-    gap: 8px;
-    justify-content: flex-start;
-    padding: 0 10px;
 }
 
 body.sidebar-collapsed .sidebar__session-delete{
