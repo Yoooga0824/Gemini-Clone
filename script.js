@@ -345,12 +345,6 @@ const normalizeShortCodeBlocks = (rootElement) => {
 const applyContentGroupCards = (rootElement) => {
   if (!rootElement) return;
   rootElement.classList.add("message__text--enhanced");
-  const topLevelBlocks = [...rootElement.children].filter((node) =>
-    node.matches("p, ul, ol, pre, blockquote, table, section")
-  );
-  topLevelBlocks.forEach((node) => {
-    node.classList.add("message__group-card");
-  });
 };
 
 const applyShikiToMessageCodeBlocks = async (rootElement) => {
