@@ -649,7 +649,7 @@ const playHeaderTypingAnimation = () => {
   const fullText =
     headerTypingTitle.dataset.fullText || headerTypingText.textContent || "";
   const characters = Array.from(fullText);
-  const totalDuration = 750;
+  const totalDuration = 500;
   const typingDelay = Math.max(totalDuration / Math.max(characters.length, 1), 1);
 
   headerTypingText.textContent = "";
