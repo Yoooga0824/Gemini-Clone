@@ -1,5 +1,6 @@
 const messageForm = document.querySelector(".prompt__form");
 const chatHistoryContainer = document.querySelector(".chats");
+const promptContainer = document.querySelector(".prompt");
 
 const themeToggleButton = document.getElementById("themeToggler");
 const sidebarElement = document.getElementById("appSidebar");
@@ -242,7 +243,7 @@ const persistCurrentUserProfile = () => {
     display_name: currentUser.display_name || "",
     full_name: currentUser.full_name || "",
     bio: currentUser.bio || "",
-    avatar_url: currentUser.avatar_url || "",
+    avatar_url: normalizeAvatarUrl(currentUser.avatar_url),
   };
   localStorage.setItem(USER_PROFILE_STORAGE_KEY, JSON.stringify(profile));
 };
@@ -438,6 +439,7 @@ const renderPendingAttachments = () => {
   if (!attachmentList) return;
   if (pendingAttachments.length === 0) {
     attachmentList.innerHTML = "";
+    updateChatBottomSafeSpace();
     return;
   }
 
@@ -461,6 +463,7 @@ const renderPendingAttachments = () => {
       `
     )
     .join("");
+  updateChatBottomSafeSpace();
 };
 
 const isProbablyTextFile = (file) => {
@@ -552,6 +555,20 @@ const scrollChatsToBottom = (behavior = "smooth", force = false) => {
   scrollElement.scrollTo({ top: targetTop, behavior });
 };
 
+const updateChatBottomSafeSpace = () => {
+  if (!themeRoot || !promptContainer) return;
+  if (!document.body.classList.contains("hide-header")) {
+    themeRoot.style.setProperty("--chat-bottom-safe-space", "0px");
+    return;
+  }
+  const promptRect = promptContainer.getBoundingClientRect();
+  const occupiedFromBottom = Math.max(0, window.innerHeight - promptRect.top);
+  const attachmentsHeight = attachmentList ? Math.ceil(attachmentList.getBoundingClientRect().height) : 0;
+  const spacingBuffer = attachmentsHeight > 0 ? 18 : 10;
+  const nextInset = Math.max(72, Math.ceil(occupiedFromBottom) + attachmentsHeight + spacingBuffer);
+  themeRoot.style.setProperty("--chat-bottom-safe-space", `${nextInset}px`);
+};
+
 const adjustPromptInputHeight = () => {
   if (!promptInput) return;
   promptInput.style.height = "auto";
@@ -569,6 +586,7 @@ const adjustPromptInputHeight = () => {
     ? Math.max(0, Math.round((nextHeight - PROMPT_INPUT_MIN_HEIGHT) * 0.9))
     : 0;
   themeRoot.style.setProperty("--prompt-expand-shift", `${headerLiftOffset}px`);
+  updateChatBottomSafeSpace();
 };
 
 const extractReasoningAndContentFromMessage = (responseMessage = {}) => {
@@ -1148,6 +1166,7 @@ const renderActiveSessionMessages = () => {
   });
   if (session.messages.length > 0) {
     document.body.classList.add("hide-header");
+    updateChatBottomSafeSpace();
   }
   scrollChatsToBottom("auto", true);
 };
@@ -1695,6 +1714,7 @@ const bindSidebarEvents = () => {
     if (!isMobileViewport()) {
       closeSidebarDrawer();
     }
+    updateChatBottomSafeSpace();
   });
 };
 
@@ -2650,6 +2670,7 @@ const handleOutgoingMessage = async () => {
   adjustPromptInputHeight();
   themeRoot.style.setProperty("--prompt-expand-shift", "0px");
   document.body.classList.add("hide-header");
+  updateChatBottomSafeSpace();
   displayLoadingAnimation(selectedModelKeys);
 };
 

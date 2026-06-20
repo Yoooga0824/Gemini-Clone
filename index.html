@@ -102,7 +102,7 @@
 
       <div class="app-sidebar__bottom">
         <button type="button" class="sidebar__user-card" id="sidebarUserCard">
-          <img class="sidebar__user-avatar" id="sidebarUserAvatar" src="assets/profile.png" alt="用户头像" />
+          <img class="sidebar__user-avatar" id="sidebarUserAvatar" src="data:image/gif;base64,R0lGODlhAQABAIAAAAAAAP///ywAAAAAAQABAAACAUwAOw==" alt="用户头像" />
           <span class="sidebar__label" id="sidebarUserLabel">登录</span>
         </button>
         <button type="button" class="sidebar__settings-btn" id="sidebarSettingsButton">
@@ -112,6 +112,29 @@
       </div>
     </aside>
     <button type="button" class="sidebar__backdrop" id="sidebarBackdrop" aria-label="关闭侧边栏"></button>
+    <script>
+      (function preloadSidebarProfile() {
+        const defaultAvatar = "assets/profile.png";
+        let avatar = defaultAvatar;
+        let label = "登录";
+        try {
+          const token = localStorage.getItem("authToken");
+          const raw = localStorage.getItem("cachedUserProfile");
+          const cached = raw ? JSON.parse(raw) : null;
+          if (token && cached && typeof cached === "object") {
+            avatar = String(cached.avatar_url || "").trim() || defaultAvatar;
+            label = String(cached.display_name || "").trim() || "用户";
+          }
+        } catch {
+          avatar = defaultAvatar;
+          label = "登录";
+        }
+        const avatarEl = document.getElementById("sidebarUserAvatar");
+        if (avatarEl) avatarEl.src = avatar;
+        const labelEl = document.getElementById("sidebarUserLabel");
+        if (labelEl) labelEl.textContent = label;
+      })();
+    </script>
 
     <nav class="navbar">
       <div class="navbar__left">

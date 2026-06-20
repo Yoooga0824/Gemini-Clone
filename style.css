@@ -101,6 +101,7 @@
     --prose-quote-border: rgba(138, 180, 248, 0.46);
     --prose-quote-bg: rgba(138, 180, 248, 0.08);
     --prompt-expand-shift: 0px;
+    --chat-bottom-safe-space: 10rem;
     --prompt-prechat-transform: translateY(calc(-54vh + 3.2rem));
     --sidebar-expanded-width: 260px;
     --sidebar-collapsed-width: 60px;
@@ -681,7 +682,7 @@ body.hide-header .prompt{
 }
 
 .chats{
-    padding: 2rem 1rem 10rem;
+    padding: 2rem 1rem 2rem;
     height: 100vh;
     margin-left: var(--sidebar-current-width);
     width: calc(100% - var(--sidebar-current-width));
@@ -689,6 +690,11 @@ body.hide-header .prompt{
     scrollbar-color: var(--chat-scrollbar-thumb) var(--chat-scrollbar-track);
     scrollbar-width: thin;
     transition: margin-left 0.3s ease, width 0.3s ease;
+}
+
+body.hide-header .chats{
+    height: calc(100vh - var(--chat-bottom-safe-space));
+    padding-bottom: 1.25rem;
 }
 
 .app-sidebar{
