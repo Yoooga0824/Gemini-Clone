@@ -1106,6 +1106,56 @@ const loadUsagePanelData = async () => {
   renderUsageChart();
 };
 
+const buildUsageYAxisRange = (series = []) => {
+  const values = series.filter((value) => Number.isFinite(value)).map((value) => Number(value));
+  if (values.length === 0) {
+    return { min: 0, max: 1 };
+  }
+
+  const minValue = Math.min(...values);
+  const maxValue = Math.max(...values);
+  if (minValue === maxValue) {
+    if (maxValue === 0) {
+      return { min: 0, max: 1 };
+    }
+    const singlePadding = Math.max(Math.abs(maxValue) * 0.3, 1);
+    return {
+      min: Math.max(0, minValue - singlePadding),
+      max: maxValue + singlePadding,
+    };
+  }
+
+  const range = maxValue - minValue;
+  const padding = Math.max(range * 0.15, 1);
+  return {
+    min: Math.max(0, minValue - padding),
+    max: maxValue + padding,
+  };
+};
+
+const usageValueLabelPlugin = {
+  id: "usageValueLabelPlugin",
+  afterDatasetsDraw(chart) {
+    const { ctx } = chart;
+    const datasetMeta = chart.getDatasetMeta(0);
+    const datasetValues = chart?.data?.datasets?.[0]?.data || [];
+    if (!datasetMeta || !datasetMeta.data) return;
+
+    ctx.save();
+    ctx.font = "11px sans-serif";
+    ctx.fillStyle = getComputedStyle(document.body).getPropertyValue("--text-secondary-color");
+    ctx.textAlign = "center";
+    ctx.textBaseline = "bottom";
+
+    datasetMeta.data.forEach((point, index) => {
+      const value = datasetValues[index];
+      if (!Number.isFinite(value)) return;
+      ctx.fillText(String(value), point.x, point.y - 6);
+    });
+    ctx.restore();
+  },
+};
+
 const renderUsageChart = () => {
   if (!usageChartCanvas || !usageChartDataCache.recentSummary || !usageChartDataCache.totalSummary) return;
 
@@ -1140,8 +1190,10 @@ const renderUsageChart = () => {
   if (usageChartInstance) {
     usageChartInstance.destroy();
   }
+  const yAxisRange = buildUsageYAxisRange(data);
   usageChartInstance = new Chart(usageChartCanvas.getContext("2d"), {
     type: "line",
+    plugins: [usageValueLabelPlugin],
     data: {
       labels,
       datasets: [
@@ -1170,8 +1222,11 @@ const renderUsageChart = () => {
           grid: { display: false },
         },
         y: {
-          ticks: { color: axisColor, maxTicksLimit: 8, font: { size: 11 } },
-          grid: { color: "rgba(255,255,255,0.07)" },
+          min: yAxisRange.min,
+          max: yAxisRange.max,
+          ticks: { display: false },
+          grid: { display: false },
+          border: { display: false },
         },
       },
     },
