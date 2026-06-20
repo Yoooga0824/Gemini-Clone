@@ -1783,9 +1783,9 @@ const consumeAssistantEventStream = async (
   let visibleContent = "";
   let visibleReasoning = "";
   let renderedContent = "";
-  let provisionalReasoningFromContent = "";
   let thinkMode = false;
   let pendingTagPrefix = "";
+  let hasReasoningSignal = false;
   let streamStarted = false;
   let streamCompleted = false;
   let resolvedSession = null;
@@ -1828,9 +1828,9 @@ const consumeAssistantEventStream = async (
 
   const getContentTargetForCurrentPhase = () => {
     const contentForDisplay = stripReasoningOverlap(visibleContent, visibleReasoning);
-    // Hard gate: never render content before stream completion.
-    // This prevents any transient reasoning text from flashing in content area.
-    if (!streamCompleted) return "";
+    // Only hold back content while explicit reasoning exists.
+    // If backend streams plain content, render it directly in the正文 area.
+    if (!streamCompleted && hasReasoningSignal) return "";
 
     const hasReasoning = ENABLE_REASONING_OUTPUT && (visibleReasoning || "").trim().length > 0;
     if (!hasReasoning) return contentForDisplay || "";
@@ -1995,6 +1995,7 @@ const consumeAssistantEventStream = async (
           });
           visibleContent = finalParsed.content || "";
           visibleReasoning = ENABLE_REASONING_OUTPUT ? finalParsed.reasoning || "" : "";
+          if ((visibleReasoning || "").trim()) hasReasoningSignal = true;
           thinkMode = false;
           pendingTagPrefix = "";
         } else {
@@ -2006,6 +2007,7 @@ const consumeAssistantEventStream = async (
           if (
             hasExplicitReasoningDelta
           ) {
+            hasReasoningSignal = true;
             visibleReasoning += eventData.reasoning_content;
           }
 
@@ -2014,30 +2016,15 @@ const consumeAssistantEventStream = async (
             const loweredChunk = contentChunk.toLowerCase();
             const chunkIncludesThinkTag =
               loweredChunk.includes("<think") || loweredChunk.includes("</think");
-            const shouldUseProvisionalReasoning =
-              ENABLE_REASONING_OUTPUT &&
-              !hasExplicitReasoningDelta &&
-              !thinkMode &&
-              !pendingTagPrefix &&
-              !chunkIncludesThinkTag;
-            let handledAsProvisionalReasoning = false;
-
-            if (shouldUseProvisionalReasoning) {
-              provisionalReasoningFromContent += contentChunk;
-              visibleReasoning = provisionalReasoningFromContent;
-              handledAsProvisionalReasoning = true;
-            }
-
-            if (!handledAsProvisionalReasoning) {
-              const overlappedWithReasoning = shouldTreatDeltaContentAsReasoning(
-                contentChunk,
-                typeof eventData.reasoning_content === "string"
-                  ? eventData.reasoning_content
-                  : ""
-              );
-              if (!overlappedWithReasoning) {
-                routeMixedDelta(contentChunk);
-              }
+            if (chunkIncludesThinkTag) hasReasoningSignal = true;
+            const overlappedWithReasoning = shouldTreatDeltaContentAsReasoning(
+              contentChunk,
+              typeof eventData.reasoning_content === "string"
+                ? eventData.reasoning_content
+                : ""
+            );
+            if (!overlappedWithReasoning) {
+              routeMixedDelta(contentChunk);
             }
           }
         }
