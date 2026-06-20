@@ -1683,6 +1683,7 @@ body.sidebar-collapsed .sidebar__brand:hover .sidebar__expand-btn{
     display: inline-flex;
     align-items: center;
     justify-content: center;
+    font-size: 0.88rem;
 }
 
 .profile-upload-btn input{
