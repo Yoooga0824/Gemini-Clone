@@ -916,6 +916,12 @@ body.hide-header .prompt{
     transition: background 0.25s ease, color 0.25s ease;
 }
 
+body:not(.sidebar-collapsed) .sidebar__session{
+    justify-content: flex-start;
+    gap: 8px;
+    padding: 0 10px;
+}
+
 .sidebar__session-item{
     position: relative;
     width: 100%;
@@ -932,6 +938,7 @@ body.hide-header .prompt{
 }
 
 .sidebar__session-title{
+    flex: 1;
     text-align: left;
     overflow: hidden;
     text-overflow: ellipsis;
@@ -1052,6 +1059,18 @@ body.sidebar-collapsed .sidebar__session-title{
     display: none;
 }
 
+.sidebar__settings-btn .sidebar__label{
+    color: var(--text-secondary-color);
+    font-size: 0.88rem;
+    font-weight: 520;
+}
+
+.sidebar__user-card .sidebar__label{
+    color: var(--text-color);
+    font-size: 0.9rem;
+    font-weight: 560;
+}
+
 .sidebar__new-chat-btn .sidebar__label{
     display: inline;
 }
@@ -1059,6 +1078,20 @@ body.sidebar-collapsed .sidebar__session-title{
 body:not(.sidebar-collapsed) .sidebar__new-chat-btn .sidebar__label{
     font-size: 0.9rem;
     color: var(--text-color);
+}
+
+body:not(.sidebar-collapsed) .sidebar__settings-btn,
+body:not(.sidebar-collapsed) .sidebar__user-card{
+    width: 100%;
+    justify-content: flex-start;
+    gap: 8px;
+    padding: 0 10px;
+    text-align: left;
+}
+
+body:not(.sidebar-collapsed) .sidebar__settings-btn .sidebar__label,
+body:not(.sidebar-collapsed) .sidebar__user-card .sidebar__label{
+    display: inline;
 }
 
 body.sidebar-collapsed .sidebar__section-title{
@@ -1088,13 +1121,13 @@ body.sidebar-collapsed .sidebar__history{
 }
 
 .sidebar__session-icon{
-    font-size: var(--sidebar-icon-size);
+    font-size: calc(var(--sidebar-icon-size) * 0.75);
     line-height: 1;
     display: inline-flex;
     align-items: center;
     justify-content: center;
-    width: var(--sidebar-icon-size);
-    height: var(--sidebar-icon-size);
+    width: calc(var(--sidebar-icon-size) * 0.75);
+    height: calc(var(--sidebar-icon-size) * 0.75);
     flex-shrink: 0;
     transform: translateZ(0);
     backface-visibility: hidden;
