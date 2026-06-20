@@ -835,12 +835,12 @@ body:not(.sidebar-collapsed) .sidebar__brand{
     line-height: 1;
 }
 
-.sidebar__session-item.is-active .sidebar__session-delete{
+.sidebar__session-item:hover .sidebar__session-delete{
     opacity: 1;
     pointer-events: auto;
 }
 
-.sidebar__session-item.is-active .sidebar__session-delete:hover{
+.sidebar__session-item:hover .sidebar__session-delete:hover{
     background: rgba(0, 0, 0, 0.16);
     color: #ffffff;
 }
@@ -889,7 +889,7 @@ body:not(.sidebar-collapsed) .sidebar__brand{
     color: #10233b;
 }
 
-.light_mode .sidebar__session-item.is-active .sidebar__session-delete:hover{
+.light_mode .sidebar__session-item:hover .sidebar__session-delete:hover{
     background: rgba(16, 35, 59, 0.16);
     color: #10233b;
 }
