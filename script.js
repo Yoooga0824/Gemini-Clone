@@ -630,7 +630,7 @@ const renderReasoningPanel = (
   reasoningText = "",
   options = {}
 ) => {
-  const { collapseByDefault = true } = options;
+  const { collapseByDefault = true, streaming = false } = options;
   const reasoningPanel = incomingMessageElement.querySelector(".message__reasoning");
   const reasoningTextElement = incomingMessageElement.querySelector(
     ".message__reasoning-text"
@@ -655,7 +655,11 @@ const renderReasoningPanel = (
     reasoningTextElement.innerHTML = `<p>本轮没有可展示的思考内容。</p>`;
     reasoningPanel.dataset.collapsible = "false";
     reasoningPanel.dataset.expanded = "false";
-    reasoningPanel.dataset.userCollapsed = "true";
+    if (!streaming) {
+      reasoningPanel.dataset.userCollapsed = "true";
+    } else {
+      delete reasoningPanel.dataset.userCollapsed;
+    }
     reasoningPanel.classList.add("message__reasoning--empty");
     return;
   }
@@ -704,8 +708,8 @@ const showReasoningLoading = (incomingMessageElement) => {
     return;
   }
   reasoningPanel.dataset.collapsible = "false";
-  reasoningPanel.dataset.expanded = "false";
-  reasoningPanel.dataset.userCollapsed = "true";
+  delete reasoningPanel.dataset.expanded;
+  delete reasoningPanel.dataset.userCollapsed;
   reasoningPanel.classList.add("hide");
 };
 
@@ -1854,7 +1858,8 @@ const consumeAssistantEventStream = async (
   const renderCurrentFrame = () => {
     messageElement.innerHTML = marked.parse(renderedContent || "");
     renderReasoningPanel(incomingMessageElement, visibleReasoning, {
-      collapseByDefault: true,
+      collapseByDefault: false,
+      streaming: true,
     });
     scrollChatsToBottom("auto");
   };
@@ -2127,7 +2132,8 @@ const consumeAssistantEventStreamMulti = async (
     const state = trackStates.get(activeModel) || { content: "", reasoning_content: "" };
     messageElement.innerHTML = marked.parse(state.content || "");
     renderReasoningPanel(incomingMessageElement, state.reasoning_content || "", {
-      collapseByDefault: true,
+      collapseByDefault: false,
+      streaming: true,
     });
     scrollChatsToBottom("auto");
   };
