@@ -1854,7 +1854,7 @@ const consumeAssistantEventStream = async (
   const renderCurrentFrame = () => {
     messageElement.innerHTML = marked.parse(renderedContent || "");
     renderReasoningPanel(incomingMessageElement, visibleReasoning, {
-      collapseByDefault: false,
+      collapseByDefault: true,
     });
     scrollChatsToBottom("auto");
   };
@@ -2088,6 +2088,7 @@ const consumeAssistantEventStreamMulti = async (
     modelOrder.map((modelKey) => [modelKey, { model: modelKey, content: "", reasoning_content: "", done: false }])
   );
   let activeModel = modelOrder[0] || "mimo";
+  let tabsRenderKey = "";
   let streamStarted = false;
   let resolvedSession = null;
 
@@ -2104,6 +2105,9 @@ const consumeAssistantEventStreamMulti = async (
     if (!trackElement || !tabsElement) return;
     trackElement.classList.remove("hide");
     const orderedModels = [...new Set([...modelOrder, ...trackStates.keys()])];
+    const nextRenderKey = `${activeModel}::${orderedModels.join("|")}`;
+    if (tabsRenderKey === nextRenderKey) return;
+    tabsRenderKey = nextRenderKey;
     tabsElement.innerHTML = orderedModels
       .map(
         (modelKey) => `
@@ -2123,7 +2127,7 @@ const consumeAssistantEventStreamMulti = async (
     const state = trackStates.get(activeModel) || { content: "", reasoning_content: "" };
     messageElement.innerHTML = marked.parse(state.content || "");
     renderReasoningPanel(incomingMessageElement, state.reasoning_content || "", {
-      collapseByDefault: false,
+      collapseByDefault: true,
     });
     scrollChatsToBottom("auto");
   };
@@ -2181,7 +2185,10 @@ const consumeAssistantEventStreamMulti = async (
       }
 
       if (eventData.type === "delta") {
-        const state = ensureTrackState(eventData.model || activeModel);
+        const deltaModel = String(eventData.model || modelOrder[0] || activeModel || "mimo")
+          .trim()
+          .toLowerCase();
+        const state = ensureTrackState(deltaModel);
         if (!state) {
           boundaryIndex = buffered.indexOf("\n\n");
           continue;
@@ -2196,7 +2203,10 @@ const consumeAssistantEventStreamMulti = async (
           incomingMessageElement.classList.remove("message--loading");
           streamStarted = true;
         }
-        renderTrackTabs();
+        const knownModelBefore = modelOrder.includes(deltaModel);
+        if (!knownModelBefore) {
+          renderTrackTabs();
+        }
         if (state.model === activeModel) {
           renderActiveTrack();
         }
@@ -2530,7 +2540,6 @@ const displayLoadingAnimation = (requestModels = []) => {
           type="button"
           class="message__model-tab ${index === 0 ? "is-active" : ""}"
           data-model-tab="${escapeHtml(modelKey)}"
-          disabled
         >
           ${escapeHtml(getModelLabel(modelKey))}
         </button>

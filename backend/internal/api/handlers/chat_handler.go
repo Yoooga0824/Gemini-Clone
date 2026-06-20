@@ -6,6 +6,7 @@ import (
 	"net/http"
 	"strconv"
 	"strings"
+	"sync"
 
 	"gemini-clone/backend/internal/middleware"
 	"gemini-clone/backend/internal/model"
@@ -87,7 +88,10 @@ func (h *ChatHandler) postChatStream(w http.ResponseWriter, r *http.Request, req
 	w.Header().Set("Connection", "keep-alive")
 	w.Header().Set("X-Accel-Buffering", "no")
 
+	var sendMu sync.Mutex
 	sendEvent := func(payload any) error {
+		sendMu.Lock()
+		defer sendMu.Unlock()
 		data, err := json.Marshal(payload)
 		if err != nil {
 			return err
