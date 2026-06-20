@@ -787,6 +787,11 @@ body:not(.sidebar-collapsed) .sidebar__brand{
     transition: background 0.25s ease, color 0.25s ease;
 }
 
+.sidebar__session-item{
+    position: relative;
+    width: 100%;
+}
+
 .sidebar__session:hover{
     background: var(--button-hover-color);
     color: var(--text-color);
@@ -803,6 +808,41 @@ body:not(.sidebar-collapsed) .sidebar__brand{
     text-overflow: ellipsis;
     white-space: nowrap;
     font-size: 0.86rem;
+}
+
+.sidebar__session-delete{
+    position: absolute;
+    right: 6px;
+    top: 50%;
+    transform: translateY(-50%);
+    width: 28px;
+    height: 28px;
+    border: none;
+    border-radius: 7px;
+    background: transparent;
+    color: inherit;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    opacity: 0;
+    pointer-events: none;
+    cursor: pointer;
+    transition: opacity 0.2s ease, background 0.2s ease, color 0.2s ease;
+}
+
+.sidebar__session-delete i{
+    font-size: 1rem;
+    line-height: 1;
+}
+
+.sidebar__session-item.is-active .sidebar__session-delete{
+    opacity: 1;
+    pointer-events: auto;
+}
+
+.sidebar__session-item.is-active .sidebar__session-delete:hover{
+    background: rgba(0, 0, 0, 0.16);
+    color: #ffffff;
 }
 
 .app-sidebar__bottom{
@@ -846,6 +886,11 @@ body:not(.sidebar-collapsed) .sidebar__brand{
 
 .light_mode .sidebar__session.is-active{
     background: #c8daf1;
+    color: #10233b;
+}
+
+.light_mode .sidebar__session-item.is-active .sidebar__session-delete:hover{
+    background: rgba(16, 35, 59, 0.16);
     color: #10233b;
 }
 
@@ -937,6 +982,10 @@ body.sidebar-collapsed .sidebar__user-card,
 body.sidebar-collapsed .sidebar__session{
     justify-content: center;
     padding: 0;
+}
+
+body.sidebar-collapsed .sidebar__session-delete{
+    display: none;
 }
 
 body.sidebar-collapsed .sidebar__brand{

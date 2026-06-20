@@ -144,7 +144,7 @@ func (h *ChatHandler) GetSessions(w http.ResponseWriter, r *http.Request) {
 }
 
 func (h *ChatHandler) GetSessionDetail(w http.ResponseWriter, r *http.Request) {
-	if r.Method != http.MethodGet {
+	if r.Method != http.MethodGet && r.Method != http.MethodDelete {
 		writeJSON(w, http.StatusMethodNotAllowed, model.ErrorEnvelope{
 			Error: model.ErrorBody{Message: "method not allowed"},
 		})
@@ -160,6 +160,21 @@ func (h *ChatHandler) GetSessionDetail(w http.ResponseWriter, r *http.Request) {
 	}
 
 	userID := middleware.UserIDFromContext(r.Context())
+	if r.Method == http.MethodDelete {
+		if err := h.chatService.DeleteSession(r.Context(), userID, sessionID); err != nil {
+			status := http.StatusBadRequest
+			if strings.Contains(strings.ToLower(err.Error()), "not found") {
+				status = http.StatusNotFound
+			}
+			writeJSON(w, status, model.ErrorEnvelope{
+				Error: model.ErrorBody{Message: err.Error()},
+			})
+			return
+		}
+		writeJSON(w, http.StatusOK, map[string]string{"status": "deleted"})
+		return
+	}
+
 	session, messages, err := h.chatService.GetSessionDetail(r.Context(), userID, sessionID)
 	if err != nil {
 		status := http.StatusBadRequest

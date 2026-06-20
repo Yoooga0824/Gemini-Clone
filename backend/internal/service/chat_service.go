@@ -22,6 +22,7 @@ type Generator interface {
 type ChatStore interface {
 	CreateSession(ctx context.Context, userID int64, title string) (model.ChatSessionSummary, error)
 	GetSession(ctx context.Context, userID, sessionID int64) (model.ChatSessionSummary, error)
+	DeleteSession(ctx context.Context, userID, sessionID int64) error
 	ListSessions(ctx context.Context, userID int64, limit int) ([]model.ChatSessionSummary, error)
 	ListSessionMessages(ctx context.Context, userID, sessionID int64) ([]model.ChatMessageItem, error)
 	ListRecentTurns(ctx context.Context, userID, sessionID int64, limit int) ([]model.ChatTurn, error)
@@ -161,6 +162,22 @@ func (s *ChatService) GetSessionDetail(
 		return model.ChatSessionSummary{}, nil, err
 	}
 	return session, messages, nil
+}
+
+func (s *ChatService) DeleteSession(ctx context.Context, userID, sessionID int64) error {
+	if userID <= 0 {
+		return fmt.Errorf("user not authenticated")
+	}
+	if sessionID <= 0 {
+		return fmt.Errorf("invalid session id")
+	}
+	if err := s.store.DeleteSession(ctx, userID, sessionID); err != nil {
+		if err == sql.ErrNoRows {
+			return fmt.Errorf("session not found")
+		}
+		return err
+	}
+	return nil
 }
 
 func (s *ChatService) ensureSession(

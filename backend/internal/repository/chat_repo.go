@@ -78,6 +78,25 @@ func (r *ChatRepository) GetSession(ctx context.Context, userID, sessionID int64
 	return session, nil
 }
 
+func (r *ChatRepository) DeleteSession(ctx context.Context, userID, sessionID int64) error {
+	query := `
+		DELETE FROM chat_sessions
+		WHERE id = ? AND user_id = ?
+	`
+	result, err := r.db.ExecContext(ctx, query, sessionID, userID)
+	if err != nil {
+		return fmt.Errorf("delete chat session: %w", err)
+	}
+	rowsAffected, err := result.RowsAffected()
+	if err != nil {
+		return fmt.Errorf("read affected rows for delete chat session: %w", err)
+	}
+	if rowsAffected == 0 {
+		return sql.ErrNoRows
+	}
+	return nil
+}
+
 func (r *ChatRepository) ListSessions(ctx context.Context, userID int64, limit int) ([]model.ChatSessionSummary, error) {
 	if limit <= 0 || limit > maxSessionsPerUser {
 		limit = maxSessionsPerUser

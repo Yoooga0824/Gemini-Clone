@@ -719,15 +719,26 @@ const renderSidebarSessions = () => {
   sidebarHistory.innerHTML = chatSessions
     .map(
       (session) => `
-        <button
-          type="button"
-          class="sidebar__session ${session.id === activeSessionId ? "is-active" : ""}"
-          data-session-id="${session.id}"
-          title="${escapeHtml(session.title)}"
-        >
-          <i class="bx bx-message-rounded-dots sidebar__session-icon"></i>
-          <span class="sidebar__session-title">${escapeHtml(session.title)}</span>
-        </button>
+        <div class="sidebar__session-item ${session.id === activeSessionId ? "is-active" : ""}">
+          <button
+            type="button"
+            class="sidebar__session ${session.id === activeSessionId ? "is-active" : ""}"
+            data-session-id="${session.id}"
+            title="${escapeHtml(session.title)}"
+          >
+            <i class="bx bx-message-rounded-dots sidebar__session-icon"></i>
+            <span class="sidebar__session-title">${escapeHtml(session.title)}</span>
+          </button>
+          <button
+            type="button"
+            class="sidebar__session-delete"
+            data-delete-session-id="${session.id}"
+            title="删除会话"
+            aria-label="删除会话"
+          >
+            <i class="bx bx-trash"></i>
+          </button>
+        </div>
       `
     )
     .join("");
@@ -979,6 +990,48 @@ const fetchCurrentUser = async () => {
   currentUser = await response.json();
   applyUserProfileToUI();
   return currentUser;
+};
+
+const deleteSession = async (sessionId) => {
+  if (!sessionId) return;
+  const session = chatSessions.find((item) => item.id === sessionId);
+  if (!session) return;
+
+  const persistedId = getPersistedSessionId(sessionId);
+  if (persistedId && authToken) {
+    const response = await authFetch(`${CHAT_SESSIONS_URL}/${persistedId}`, { method: "DELETE" });
+    if (response.status === 401) {
+      logout();
+      return;
+    }
+    if (!response.ok) {
+      throw new Error(await parseErrorMessage(response, "删除历史会话失败"));
+    }
+  }
+
+  chatSessions = chatSessions.filter((item) => item.id !== sessionId);
+  if (chatSessions.length === 0) {
+    const newSession = createSession("新聊天");
+    chatSessions = [newSession];
+    setActiveSession(newSession.id);
+    renderActiveSessionMessages();
+    return;
+  }
+
+  if (activeSessionId === sessionId) {
+    const fallbackSession = chatSessions.find(
+      (item) => item.title === "新聊天" && (item.messages || []).length === 0
+    ) || chatSessions[0];
+    setActiveSession(fallbackSession.id);
+    if (fallbackSession.loaded) {
+      renderActiveSessionMessages();
+    } else {
+      await fetchSessionMessages(fallbackSession.id);
+    }
+    return;
+  }
+
+  renderSidebarSessions();
 };
 
 const handleAuthSubmit = async (event) => {
@@ -1320,6 +1373,22 @@ const bindSidebarEvents = () => {
   });
 
   sidebarHistory?.addEventListener("click", (event) => {
+    const deleteButton = event.target.closest("[data-delete-session-id]");
+    if (deleteButton) {
+      const { deleteSessionId } = deleteButton.dataset;
+      if (!deleteSessionId) return;
+      const confirmDelete = window.confirm("确认删除这条历史会话吗？");
+      if (!confirmDelete) return;
+      void (async () => {
+        try {
+          await deleteSession(deleteSessionId);
+        } catch (error) {
+          alert(error?.message || "删除失败，请稍后重试");
+        }
+      })();
+      return;
+    }
+
     const sessionButton = event.target.closest("[data-session-id]");
     if (!sessionButton) return;
     const { sessionId } = sessionButton.dataset;
