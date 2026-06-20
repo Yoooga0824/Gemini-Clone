@@ -596,13 +596,14 @@ body.hide-header .prompt{
 }
 
 .sidebar__brand{
-    width: var(--sidebar-action-size);
+    width: 100%;
     height: var(--sidebar-action-size);
     border-radius: 8px;
     display: flex;
     align-items: center;
-    justify-content: center;
-    padding: 0;
+    justify-content: flex-start;
+    gap: 8px;
+    padding: 0 10px;
     position: relative;
     overflow: hidden;
 }
@@ -686,14 +687,6 @@ body.hide-header .prompt{
     color: var(--text-color);
 }
 
-body:not(.sidebar-collapsed) .sidebar__brand{
-    width: 100%;
-    height: var(--sidebar-action-size);
-    justify-content: flex-start;
-    padding: 0 10px;
-    gap: 8px;
-}
-
 .sidebar__expand-btn:hover{
     background: var(--button-hover-color);
 }
@@ -716,6 +709,14 @@ body:not(.sidebar-collapsed) .sidebar__brand{
     cursor: pointer;
     text-align: center;
     font-size: 0.92rem;
+    transition: background 0.25s ease;
+}
+
+.sidebar__new-chat-btn{
+    width: 100%;
+    justify-content: flex-start;
+    gap: 8px;
+    padding: 0 10px;
     transition: background 0.25s ease;
 }
 
@@ -918,21 +919,16 @@ body.sidebar-collapsed .sidebar__session-title{
     pointer-events: none;
 }
 
-.sidebar__new-chat-btn .sidebar__label,
 .sidebar__settings-btn .sidebar__label,
 .sidebar__user-card .sidebar__label{
     display: none;
 }
 
-body:not(.sidebar-collapsed) .sidebar__new-chat-btn{
-    width: 100%;
-    justify-content: flex-start;
-    padding: 0 10px;
-    gap: 8px;
+.sidebar__new-chat-btn .sidebar__label{
+    display: inline;
 }
 
 body:not(.sidebar-collapsed) .sidebar__new-chat-btn .sidebar__label{
-    display: inline;
     font-size: 0.9rem;
     color: var(--text-color);
 }
@@ -976,7 +972,6 @@ body.sidebar-collapsed .sidebar__history{
     backface-visibility: hidden;
 }
 
-body.sidebar-collapsed .sidebar__new-chat-btn,
 body.sidebar-collapsed .sidebar__settings-btn,
 body.sidebar-collapsed .sidebar__user-card,
 body.sidebar-collapsed .sidebar__session{
@@ -984,16 +979,31 @@ body.sidebar-collapsed .sidebar__session{
     padding: 0;
 }
 
+body.sidebar-collapsed .sidebar__brand{
+    width: 100%;
+    margin: 0;
+    gap: 8px;
+    justify-content: flex-start;
+    padding: 0 10px;
+}
+
+body.sidebar-collapsed .sidebar__new-chat-btn{
+    width: 100%;
+    margin: 0;
+    gap: 8px;
+    justify-content: flex-start;
+    padding: 0 10px;
+}
+
 body.sidebar-collapsed .sidebar__session-delete{
     display: none;
 }
 
-body.sidebar-collapsed .sidebar__brand{
-    justify-content: center;
-    padding: 0;
+body.sidebar-collapsed .sidebar__brand-title{
+    display: none;
 }
 
-body.sidebar-collapsed .sidebar__brand-title{
+body.sidebar-collapsed .sidebar__new-chat-btn .sidebar__label{
     display: none;
 }
 
