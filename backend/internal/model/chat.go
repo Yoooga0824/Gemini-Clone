@@ -3,8 +3,9 @@ package model
 // ChatRequest is what frontend sends to backend.
 // Keep it minimal and easy for beginners.
 type ChatRequest struct {
-	Message   string `json:"message"`
-	SessionID int64  `json:"session_id,omitempty"`
+	Message   string   `json:"message"`
+	SessionID int64    `json:"session_id,omitempty"`
+	Models    []string `json:"models,omitempty"`
 }
 
 // ErrorEnvelope provides a consistent error shape to frontend.
@@ -32,6 +33,15 @@ type Message struct {
 	Role             string `json:"role"`
 	Content          string `json:"content"`
 	ReasoningContent string `json:"reasoning_content,omitempty"`
+	Model            string `json:"model,omitempty"`
+}
+
+type ModelAssistantResponse struct {
+	Model            string      `json:"model"`
+	Content          string      `json:"content"`
+	ReasoningContent string      `json:"reasoning_content,omitempty"`
+	Usage            *TokenUsage `json:"usage,omitempty"`
+	Error            string      `json:"error,omitempty"`
 }
 
 // AssistantReply is an internal normalized shape from provider to service.
@@ -55,10 +65,13 @@ type ChatSessionSummary struct {
 }
 
 type ChatMessageItem struct {
-	Role             string `json:"role"`
-	Content          string `json:"content"`
-	ReasoningContent string `json:"reasoning_content,omitempty"`
-	CreatedAt        string `json:"created_at,omitempty"`
+	Role             string                   `json:"role"`
+	Content          string                   `json:"content"`
+	ReasoningContent string                   `json:"reasoning_content,omitempty"`
+	Model            string                   `json:"model,omitempty"`
+	SelectedModel    string                   `json:"selected_model,omitempty"`
+	ModelResponses   []ModelAssistantResponse `json:"model_responses,omitempty"`
+	CreatedAt        string                   `json:"created_at,omitempty"`
 }
 
 type ChatSessionListResponse struct {

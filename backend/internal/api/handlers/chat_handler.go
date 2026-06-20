@@ -38,13 +38,13 @@ func (h *ChatHandler) PostChat(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	if wantsStreamResponse(r) {
+	if wantsStreamResponse(r) && len(req.Models) <= 1 {
 		h.postChatStream(w, r, req)
 		return
 	}
 
 	userID := middleware.UserIDFromContext(r.Context())
-	reply, session, err := h.chatService.Reply(r.Context(), userID, req.SessionID, req.Message)
+	replies, session, err := h.chatService.ReplyMulti(r.Context(), userID, req.SessionID, req.Message, req.Models)
 	if err != nil {
 		writeJSON(w, http.StatusBadRequest, model.ErrorEnvelope{
 			Error: model.ErrorBody{Message: err.Error()},
@@ -52,17 +52,21 @@ func (h *ChatHandler) PostChat(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	resp := model.OpenAICompatibleResponse{
-		Choices: []model.Choice{
-			{
-				Message: model.Message{
-					Role:             "assistant",
-					Content:          reply.Content,
-					ReasoningContent: reply.ReasoningContent,
-				},
+	choices := make([]model.Choice, 0, len(replies))
+	for _, reply := range replies {
+		choices = append(choices, model.Choice{
+			Message: model.Message{
+				Role:             "assistant",
+				Content:          reply.Content,
+				ReasoningContent: reply.ReasoningContent,
+				Model:            reply.Model,
 			},
-		},
-		Usage:   reply.Usage,
+		})
+	}
+	primaryUsage := replies[0].Usage
+	resp := model.OpenAICompatibleResponse{
+		Choices: choices,
+		Usage:   primaryUsage,
 		Session: &session,
 	}
 
@@ -101,6 +105,7 @@ func (h *ChatHandler) postChatStream(w http.ResponseWriter, r *http.Request, req
 		userID,
 		req.SessionID,
 		req.Message,
+		firstModelOrFallback(req.Models),
 		func(delta model.AssistantReplyDelta) error {
 			return sendEvent(map[string]string{
 				"type":              "delta",
@@ -196,6 +201,16 @@ func (h *ChatHandler) GetSessionDetail(w http.ResponseWriter, r *http.Request) {
 func wantsStreamResponse(r *http.Request) bool {
 	accept := strings.ToLower(r.Header.Get("Accept"))
 	return strings.Contains(accept, "text/event-stream")
+}
+
+func firstModelOrFallback(models []string) string {
+	for _, item := range models {
+		trimmed := strings.TrimSpace(item)
+		if trimmed != "" {
+			return trimmed
+		}
+	}
+	return ""
 }
 
 func writeJSON(w http.ResponseWriter, status int, payload any) {

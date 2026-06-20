@@ -27,14 +27,17 @@ func main() {
 		log.Fatalf("load config failed: %v", err)
 	}
 
-	llmClient := provider.NewOpenAICompatibleClient(
-		cfg.UpstreamBaseURL,
-		cfg.UpstreamPath,
-		cfg.UpstreamAPIKey,
-		cfg.UpstreamModel,
-		cfg.MaxTokens,
-		cfg.Temperature,
-	)
+	llmClients := make(map[string]*provider.OpenAICompatibleClient, len(cfg.ModelProviders))
+	for modelKey, providerCfg := range cfg.ModelProviders {
+		llmClients[modelKey] = provider.NewOpenAICompatibleClient(
+			providerCfg.BaseURL,
+			providerCfg.Path,
+			providerCfg.APIKey,
+			providerCfg.Model,
+			cfg.MaxTokens,
+			cfg.Temperature,
+		)
+	}
 
 	db, err := database.OpenMySQL(cfg.MySQLDSN)
 	if err != nil {
@@ -53,7 +56,11 @@ func main() {
 	authService := service.NewAuthService(userRepo, cfg.JWTSecret, cfg.JWTExpiryHours)
 	userService := service.NewUserService(userRepo)
 	usageService := service.NewUsageService(usageRepo)
-	chatService := service.NewChatService(llmClient, chatRepo, usageService, cfg.UpstreamModel)
+	modelGenerators := make(map[string]service.Generator, len(llmClients))
+	for modelKey, client := range llmClients {
+		modelGenerators[modelKey] = client
+	}
+	chatService := service.NewChatService(modelGenerators, cfg.DefaultModelKey, chatRepo, usageService)
 
 	authHandler := handlers.NewAuthHandler(authService)
 	userHandler := handlers.NewUserHandler(userService, cfg.AvatarUploadDir, cfg.AvatarMaxBytes)

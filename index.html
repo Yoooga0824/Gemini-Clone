@@ -114,12 +114,50 @@
     <button type="button" class="sidebar__backdrop" id="sidebarBackdrop" aria-label="关闭侧边栏"></button>
 
     <nav class="navbar">
-      <button class="navbar__button navbar__button--menu" id="sidebarMobileToggle" type="button">
-        <i class="bx bx-menu"></i>
-      </button>
-      <button class="navbar__button" id="themeToggler">
-        <i class="bx bx-sun"></i>
-      </button>
+      <div class="navbar__left">
+        <button class="navbar__button navbar__button--menu" id="sidebarMobileToggle" type="button">
+          <i class="bx bx-menu"></i>
+        </button>
+        <div class="model-picker" id="modelPicker">
+          <button
+            class="model-picker__trigger"
+            id="modelPickerTrigger"
+            type="button"
+            aria-haspopup="true"
+            aria-expanded="false"
+          >
+            <span class="model-picker__title" id="modelPickerSummary">Kimi</span>
+            <i class="bx bx-chevron-down"></i>
+          </button>
+          <div class="model-picker__panel hide" id="modelPickerPanel">
+            <div class="model-picker__panel-head">
+              <span>选择模型</span>
+              <small>最多同时勾选 3 个</small>
+            </div>
+            <label class="model-picker__option">
+              <input type="checkbox" value="deepseek" data-model-option />
+              <span>DeepSeek</span>
+            </label>
+            <label class="model-picker__option">
+              <input type="checkbox" value="doubao" data-model-option />
+              <span>豆包</span>
+            </label>
+            <label class="model-picker__option">
+              <input type="checkbox" value="kimi" data-model-option />
+              <span>Kimi</span>
+            </label>
+            <label class="model-picker__option">
+              <input type="checkbox" value="qwen" data-model-option />
+              <span>千问</span>
+            </label>
+          </div>
+        </div>
+      </div>
+      <div class="navbar__right">
+        <button class="navbar__button" id="themeToggler">
+          <i class="bx bx-sun"></i>
+        </button>
+      </div>
     </nav>
 
     <header class="header">

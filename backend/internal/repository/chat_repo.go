@@ -149,6 +149,16 @@ func (r *ChatRepository) ListSessionMessages(ctx context.Context, userID, sessio
 		if err := rows.Scan(&msg.Role, &msg.Content, &msg.ReasoningContent, &msg.CreatedAt); err != nil {
 			return nil, fmt.Errorf("scan chat message: %w", err)
 		}
+		if strings.TrimSpace(msg.Role) == "assistant" {
+			if payload, ok := model.ParsePersistedAssistantContent(msg.Content); ok {
+				msg.SelectedModel = payload.SelectedModel
+				msg.ModelResponses = payload.Responses
+				selected := pickSelectedModelResponse(payload.SelectedModel, payload.Responses)
+				msg.Content = selected.Content
+				msg.ReasoningContent = selected.ReasoningContent
+				msg.Model = selected.Model
+			}
+		}
 		messages = append(messages, msg)
 	}
 	if err := rows.Err(); err != nil {
@@ -197,6 +207,13 @@ func (r *ChatRepository) ListRecentTurns(ctx context.Context, userID, sessionID 
 		role = strings.TrimSpace(role)
 		content = strings.TrimSpace(content)
 		reasoning = strings.TrimSpace(reasoning)
+		if role == "assistant" {
+			if payload, ok := model.ParsePersistedAssistantContent(content); ok {
+				selected := pickSelectedModelResponse(payload.SelectedModel, payload.Responses)
+				content = strings.TrimSpace(selected.Content)
+				reasoning = strings.TrimSpace(selected.ReasoningContent)
+			}
+		}
 		if role == "user" {
 			if hasCurrent {
 				turns = append(turns, currentTurn)
@@ -317,4 +334,20 @@ func normalizeSessionTitle(input string) string {
 		return string(runes[:40]) + "..."
 	}
 	return title
+}
+
+func pickSelectedModelResponse(
+	selectedModel string,
+	responses []model.ModelAssistantResponse,
+) model.ModelAssistantResponse {
+	if len(responses) == 0 {
+		return model.ModelAssistantResponse{}
+	}
+	selectedKey := strings.ToLower(strings.TrimSpace(selectedModel))
+	for _, item := range responses {
+		if strings.ToLower(strings.TrimSpace(item.Model)) == selectedKey {
+			return item
+		}
+	}
+	return responses[0]
 }

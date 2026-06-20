@@ -36,6 +36,10 @@ const logoutButton = document.getElementById("logoutButton");
 const usageSummaryText = document.getElementById("usageSummaryText");
 const usageToggleGroup = document.getElementById("usageToggleGroup");
 const usageChartCanvas = document.getElementById("usageChartCanvas");
+const modelPicker = document.getElementById("modelPicker");
+const modelPickerTrigger = document.getElementById("modelPickerTrigger");
+const modelPickerPanel = document.getElementById("modelPickerPanel");
+const modelPickerSummary = document.getElementById("modelPickerSummary");
 
 // State variables
 let currentUserMessage = null;
@@ -52,6 +56,7 @@ let usageChartDataCache = {
   recentSummary: null,
   totalSummary: null,
 };
+let selectedModelKeys = ["kimi"];
 
 const MAX_ATTACHMENT_COUNT = 6;
 const MAX_ATTACHMENT_SIZE = 5 * 1024 * 1024;
@@ -70,6 +75,7 @@ hljs.configure({
 const API_REQUEST_URL = config.BACKEND_API_URL;
 const CHAT_SESSIONS_URL = config.CHAT_SESSIONS_URL;
 const AUTH_TOKEN_STORAGE_KEY = "authToken";
+const MODEL_SELECTION_STORAGE_KEY = "selectedModels";
 const MAX_CLOUD_SESSIONS = 30;
 const promptInput = messageForm.querySelector(".prompt__form-input");
 const themeRoot = document.documentElement;
@@ -87,6 +93,13 @@ const REASONING_SCROLL_FOLLOW_THRESHOLD = 20;
 const SHORT_CODE_BLOCK_MAX_CHARS = 72;
 const MOBILE_BREAKPOINT = 980;
 let shikiHighlighterPromise = null;
+const MAX_SELECTED_MODELS = 3;
+const MODEL_LABELS = {
+  deepseek: "DeepSeek",
+  doubao: "豆包",
+  kimi: "Kimi",
+  qwen: "千问",
+};
 
 const SHIKI_LANGUAGES = [
   "javascript",
@@ -127,6 +140,46 @@ const escapeHtml = (text = "") =>
     .replace(/>/g, "&gt;")
     .replace(/"/g, "&quot;")
     .replace(/'/g, "&#39;");
+
+const getModelLabel = (modelKey = "") => MODEL_LABELS[modelKey] || modelKey || "未知模型";
+
+const normalizeModelSelection = (inputModels = []) => {
+  const seen = new Set();
+  const normalized = [];
+  (inputModels || []).forEach((item) => {
+    const key = String(item || "").trim().toLowerCase();
+    if (!MODEL_LABELS[key] || seen.has(key)) return;
+    seen.add(key);
+    normalized.push(key);
+  });
+  if (normalized.length === 0) return ["kimi"];
+  return normalized.slice(0, MAX_SELECTED_MODELS);
+};
+
+const saveModelSelection = () => {
+  localStorage.setItem(MODEL_SELECTION_STORAGE_KEY, JSON.stringify(selectedModelKeys));
+};
+
+const renderModelPickerSummary = () => {
+  if (!modelPickerSummary) return;
+  const labels = selectedModelKeys.map((key) => getModelLabel(key));
+  modelPickerSummary.textContent = labels.join(" + ");
+};
+
+const syncModelPickerCheckboxes = () => {
+  if (!modelPickerPanel) return;
+  modelPickerPanel.querySelectorAll("[data-model-option]").forEach((input) => {
+    input.checked = selectedModelKeys.includes(input.value);
+    input.disabled = !input.checked && selectedModelKeys.length >= MAX_SELECTED_MODELS;
+  });
+};
+
+const setSelectedModels = (nextModels = []) => {
+  selectedModelKeys = normalizeModelSelection(nextModels);
+  renderModelPickerSummary();
+  syncModelPickerCheckboxes();
+  saveModelSelection();
+};
 
 const normalizeAvatarUrl = (rawUrl = "") => {
   if (!rawUrl) return "assets/profile.png";
@@ -778,6 +831,29 @@ const appendAssistantToActiveSession = (content = "", reasoning = "") => {
   });
 };
 
+const appendAssistantResponsesToActiveSession = (responses = [], selectedModel = "") => {
+  const cleanedResponses = (responses || [])
+    .map((item) => ({
+      model: String(item?.model || "").trim().toLowerCase(),
+      content: item?.content || "",
+      reasoning_content: item?.reasoning_content || "",
+    }))
+    .filter((item) => item.model && (item.content || item.reasoning_content));
+  if (cleanedResponses.length === 0) {
+    appendAssistantToActiveSession("", "");
+    return;
+  }
+  const selected = cleanedResponses.find((item) => item.model === selectedModel) || cleanedResponses[0];
+  appendMessageToActiveSession({
+    role: "assistant",
+    model: selected.model,
+    content: selected.content,
+    reasoning_content: selected.reasoning_content || "",
+    selected_model: selected.model,
+    model_responses: cleanedResponses,
+  });
+};
+
 const syncActiveSessionFromServer = (serverSession = null) => {
   if (!serverSession?.id) return;
   const nextId = String(serverSession.id);
@@ -821,6 +897,10 @@ const createIncomingMessageHtml = () => `
         <div class="message__content">
             <img class="message__avatar" src="assets/YoooFind.png" alt="Gemini avatar">
             <div class="message__body">
+                <div class="message__model-track hide">
+                    <div class="message__model-track-label">回答轨道</div>
+                    <div class="message__model-tabs"></div>
+                </div>
                 <div class="message__reasoning hide">
                     <div class="message__reasoning-header">
                         <div class="message__reasoning-title">深度思考</div>
@@ -838,12 +918,101 @@ const createIncomingMessageHtml = () => `
         </div>
     `;
 
-const renderAssistantMessage = (content = "", reasoning = "") => {
+const pickModelResponse = (responses = [], preferredModel = "") => {
+  const normalizedPreferred = String(preferredModel || "").trim().toLowerCase();
+  if (normalizedPreferred) {
+    const matched = responses.find((item) => item.model === normalizedPreferred);
+    if (matched) return matched;
+  }
+  return responses[0] || {
+    model: "kimi",
+    content: "",
+    reasoning_content: "",
+  };
+};
+
+const renderAssistantPayloadIntoElement = (incomingMessageElement, response = {}) => {
+  const messageTextElement = incomingMessageElement.querySelector(".message__text");
+  if (!messageTextElement) return;
+  messageTextElement.innerHTML = marked.parse(response.content || "");
+  renderReasoningPanel(incomingMessageElement, response.reasoning_content || "", {
+    collapseByDefault: true,
+  });
+  void enhanceMessageBody(messageTextElement);
+  scrollChatsToBottom("auto");
+};
+
+const setupAssistantModelTrack = (
+  incomingMessageElement,
+  responses = [],
+  selectedModel = ""
+) => {
+  const trackElement = incomingMessageElement.querySelector(".message__model-track");
+  const tabsElement = incomingMessageElement.querySelector(".message__model-tabs");
+  if (!trackElement || !tabsElement) return;
+  if (!Array.isArray(responses) || responses.length <= 1) {
+    trackElement.classList.add("hide");
+    return;
+  }
+
+  trackElement.classList.remove("hide");
+  const picked = pickModelResponse(responses, selectedModel);
+  tabsElement.innerHTML = responses
+    .map(
+      (item) => `
+      <button
+        type="button"
+        class="message__model-tab ${item.model === picked.model ? "is-active" : ""}"
+        data-model-tab="${item.model}"
+      >
+        ${escapeHtml(getModelLabel(item.model))}
+      </button>
+    `
+    )
+    .join("");
+
+  tabsElement.addEventListener("click", (event) => {
+    const tab = event.target.closest("[data-model-tab]");
+    if (!tab) return;
+    const modelKey = tab.dataset.modelTab;
+    const activeResponse = pickModelResponse(responses, modelKey);
+    tabsElement.querySelectorAll(".message__model-tab").forEach((button) => {
+      button.classList.toggle("is-active", button.dataset.modelTab === activeResponse.model);
+    });
+    renderAssistantPayloadIntoElement(incomingMessageElement, activeResponse);
+  });
+};
+
+const renderAssistantMessage = (content = "", reasoning = "", options = {}) => {
+  const normalizedResponses = Array.isArray(options.modelResponses)
+    ? options.modelResponses
+      .map((item) => ({
+        model: String(item?.model || "").trim().toLowerCase(),
+        content: item?.content || "",
+        reasoning_content: item?.reasoning_content || "",
+      }))
+      .filter((item) => item.model && (item.content || item.reasoning_content))
+    : [];
+
   const incomingMessageElement = createChatMessageElement(
     createIncomingMessageHtml(),
     "message--incoming"
   );
   chatHistoryContainer.appendChild(incomingMessageElement);
+  if (normalizedResponses.length > 0) {
+    const active = pickModelResponse(
+      normalizedResponses,
+      options.selectedModel || normalizedResponses[0]?.model
+    );
+    setupAssistantModelTrack(
+      incomingMessageElement,
+      normalizedResponses,
+      active.model
+    );
+    renderAssistantPayloadIntoElement(incomingMessageElement, active);
+    return;
+  }
+
   const messageTextElement = incomingMessageElement.querySelector(".message__text");
   const parsedResponse = marked.parse(content || "");
   showTypingEffect(
@@ -862,7 +1031,10 @@ const renderActiveSessionMessages = () => {
   if (!session || !Array.isArray(session.messages)) return;
   session.messages.forEach((message) => {
     if (message.role === "assistant") {
-      renderAssistantMessage(message.content || "", message.reasoning_content || "");
+      renderAssistantMessage(message.content || "", message.reasoning_content || "", {
+        modelResponses: message.model_responses || [],
+        selectedModel: message.selected_model || message.model || "",
+      });
       return;
     }
     renderOutgoingMessage(message.content || "");
@@ -1415,6 +1587,32 @@ const bindSidebarEvents = () => {
   });
 };
 
+const bindModelPickerEvents = () => {
+  modelPickerTrigger?.addEventListener("click", () => {
+    const isOpening = modelPickerPanel?.classList.contains("hide");
+    modelPickerPanel?.classList.toggle("hide", !isOpening);
+    modelPicker?.classList.toggle("is-open", isOpening);
+    modelPickerTrigger?.setAttribute("aria-expanded", isOpening ? "true" : "false");
+  });
+
+  modelPickerPanel?.addEventListener("change", (event) => {
+    const option = event.target.closest("[data-model-option]");
+    if (!option) return;
+    let next = [...selectedModelKeys];
+    if (option.checked) {
+      if (!next.includes(option.value) && next.length < MAX_SELECTED_MODELS) {
+        next.push(option.value);
+      }
+    } else {
+      next = next.filter((item) => item !== option.value);
+      if (next.length === 0) {
+        next = ["kimi"];
+      }
+    }
+    setSelectedModels(next);
+  });
+};
+
 // Load saved data from local storage
 const loadSavedChatHistory = () => {
   localStorage.removeItem("saved-api-chats");
@@ -1443,6 +1641,12 @@ const loadSavedChatHistory = () => {
   chatHistoryContainer.innerHTML = "";
   document.body.classList.remove("hide-header");
   authToken = localStorage.getItem(AUTH_TOKEN_STORAGE_KEY) || "";
+  try {
+    const rawModels = JSON.parse(localStorage.getItem(MODEL_SELECTION_STORAGE_KEY) || "[]");
+    setSelectedModels(rawModels);
+  } catch {
+    setSelectedModels(["kimi"]);
+  }
   currentUser = null;
   applyUserProfileToUI();
   renderActiveSessionMessages();
@@ -1816,9 +2020,10 @@ const consumeAssistantEventStream = async (
 };
 
 // Fetch API response based on user input
-const requestApiResponse = async (incomingMessageElement) => {
+const requestApiResponse = async (incomingMessageElement, requestedModels = []) => {
   const messageTextElement =
     incomingMessageElement.querySelector(".message__text");
+  const normalizedRequestedModels = normalizeModelSelection(requestedModels);
 
   if (!authToken) {
     isGeneratingResponse = false;
@@ -1838,6 +2043,7 @@ const requestApiResponse = async (incomingMessageElement) => {
       },
       body: JSON.stringify({
         message: currentUserMessage,
+        models: normalizedRequestedModels,
         ...(sessionId ? { session_id: sessionId } : {}),
       }),
     });
@@ -1869,31 +2075,62 @@ const requestApiResponse = async (incomingMessageElement) => {
         messageTextElement,
         incomingMessageElement
       );
-      appendAssistantToActiveSession(streamResult?.content || "", streamResult?.reasoning || "");
+      appendMessageToActiveSession({
+        role: "assistant",
+        model: normalizedRequestedModels[0] || "kimi",
+        content: streamResult?.content || "",
+        reasoning_content: streamResult?.reasoning || "",
+      });
       syncActiveSessionFromServer(streamResult?.session || null);
       return;
     }
 
     const responseData = await response.json();
-
-    const responseMessage = responseData?.choices?.[0]?.message;
-    const { content: responseText, reasoning: reasoningText } =
-      extractReasoningAndContentFromMessage(responseMessage);
-    if (!responseText && !reasoningText) throw new Error("Invalid API response.");
-
-    const parsedApiResponse = marked.parse(responseText);
-    const rawApiResponse = responseText;
+    const responseChoices = Array.isArray(responseData?.choices) ? responseData.choices : [];
+    const modelResponses = responseChoices
+      .map((choice, index) => {
+        const responseMessage = choice?.message || {};
+        const parsed = extractReasoningAndContentFromMessage(responseMessage);
+        return {
+          model: String(responseMessage?.model || normalizedRequestedModels[index] || normalizedRequestedModels[0] || "kimi")
+            .trim()
+            .toLowerCase(),
+          content: parsed.content || "",
+          reasoning_content: parsed.reasoning || "",
+        };
+      })
+      .filter((item) => item.model && (item.content || item.reasoning_content));
+    if (modelResponses.length === 0) throw new Error("Invalid API response.");
     incomingMessageElement.classList.remove("message--loading");
-
-    showTypingEffect(
-      rawApiResponse,
-      parsedApiResponse,
-      messageTextElement,
-      incomingMessageElement,
-      false,
-      reasoningText
-    );
-    appendAssistantToActiveSession(responseText, reasoningText);
+    const actionsElement = incomingMessageElement.querySelector(".message__actions");
+    actionsElement?.classList.remove("hide");
+    if (modelResponses.length > 1) {
+      setupAssistantModelTrack(
+        incomingMessageElement,
+        modelResponses,
+        modelResponses[0].model
+      );
+      renderAssistantPayloadIntoElement(incomingMessageElement, modelResponses[0]);
+      appendAssistantResponsesToActiveSession(modelResponses, modelResponses[0].model);
+      isGeneratingResponse = false;
+      scrollChatsToBottom("auto");
+    } else {
+      const single = modelResponses[0];
+      showTypingEffect(
+        single.content || "",
+        marked.parse(single.content || ""),
+        messageTextElement,
+        incomingMessageElement,
+        false,
+        single.reasoning_content || ""
+      );
+      appendMessageToActiveSession({
+        role: "assistant",
+        model: single.model,
+        content: single.content || "",
+        reasoning_content: single.reasoning_content || "",
+      });
+    }
     syncActiveSessionFromServer(responseData?.session || null);
   } catch (error) {
     isGeneratingResponse = false;
@@ -1947,7 +2184,7 @@ const addCopyButtonToCodeBlocks = (scopeElement = document) => {
 };
 
 // Show loading animation during API request
-const displayLoadingAnimation = () => {
+const displayLoadingAnimation = (requestModels = []) => {
   const loadingHtml = `
 
         <div class="message__content">
@@ -1983,10 +2220,15 @@ const displayLoadingAnimation = () => {
     "message--loading"
   );
   chatHistoryContainer.appendChild(loadingMessageElement);
+  const thinkingStatusElement = loadingMessageElement.querySelector(".message__thinking-status");
+  if (thinkingStatusElement) {
+    const labels = normalizeModelSelection(requestModels).map((key) => getModelLabel(key));
+    thinkingStatusElement.textContent = `正在向 ${labels.join(" / ")} 请求回答...`;
+  }
   showReasoningLoading(loadingMessageElement);
   scrollChatsToBottom("smooth");
 
-  requestApiResponse(loadingMessageElement);
+  requestApiResponse(loadingMessageElement, requestModels);
 };
 
 // Copy message to clipboard
@@ -2034,7 +2276,7 @@ const handleOutgoingMessage = async () => {
   adjustPromptInputHeight();
   themeRoot.style.setProperty("--prompt-expand-shift", "0px");
   document.body.classList.add("hide-header");
-  displayLoadingAnimation();
+  displayLoadingAnimation(selectedModelKeys);
 };
 
 const handleFeedbackAction = (buttonElement, actionType) => {
@@ -2176,11 +2418,17 @@ fileInput?.addEventListener("change", (event) => {
 });
 
 document.addEventListener("click", (event) => {
-  if (!attachMenu || !attachButton) return;
-  const clickedInsideMenu = attachMenu.contains(event.target);
-  const clickedAttachButton = attachButton.contains(event.target);
-  if (!clickedInsideMenu && !clickedAttachButton) {
-    attachMenu.classList.add("hide");
+  if (attachMenu && attachButton) {
+    const clickedInsideMenu = attachMenu.contains(event.target);
+    const clickedAttachButton = attachButton.contains(event.target);
+    if (!clickedInsideMenu && !clickedAttachButton) {
+      attachMenu.classList.add("hide");
+    }
+  }
+  if (modelPickerPanel && modelPicker && !modelPicker.contains(event.target)) {
+    modelPickerPanel.classList.add("hide");
+    modelPicker.classList.remove("is-open");
+    modelPickerTrigger?.setAttribute("aria-expanded", "false");
   }
 });
 
@@ -2244,6 +2492,7 @@ messageForm.addEventListener("submit", (e) => {
 playHeaderTypingAnimation();
 bindSidebarEvents();
 bindModalEvents();
+bindModelPickerEvents();
 loadSavedChatHistory();
 adjustPromptInputHeight();
 if (authToken) {
