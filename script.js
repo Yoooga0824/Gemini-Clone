@@ -868,6 +868,43 @@ const appendAssistantResponsesToActiveSession = (responses = [], selectedModel =
   });
 };
 
+const extractAssistantModelResponsesFromSession = (serverSession = null, fallbackModels = []) => {
+  const messages = Array.isArray(serverSession?.messages) ? serverSession.messages : [];
+  const latestAssistantMessage = [...messages]
+    .reverse()
+    .find((item) => String(item?.role || "").toLowerCase() === "assistant");
+
+  const candidateResponses = [];
+  if (Array.isArray(latestAssistantMessage?.model_responses)) {
+    candidateResponses.push(...latestAssistantMessage.model_responses);
+  }
+  if (Array.isArray(serverSession?.model_responses)) {
+    candidateResponses.push(...serverSession.model_responses);
+  }
+
+  const normalized = candidateResponses
+    .map((item, index) => ({
+      model: String(item?.model || fallbackModels[index] || fallbackModels[0] || "mimo")
+        .trim()
+        .toLowerCase(),
+      content: item?.content || "",
+      reasoning_content: item?.reasoning_content || "",
+    }))
+    .filter((item) => item.model && (item.content || item.reasoning_content));
+
+  if (normalized.length > 0) return normalized;
+  if (!latestAssistantMessage) return [];
+
+  const fallbackSingle = {
+    model: String(latestAssistantMessage?.model || fallbackModels[0] || "mimo")
+      .trim()
+      .toLowerCase(),
+    content: latestAssistantMessage?.content || "",
+    reasoning_content: latestAssistantMessage?.reasoning_content || "",
+  };
+  return fallbackSingle.content || fallbackSingle.reasoning_content ? [fallbackSingle] : [];
+};
+
 const syncActiveSessionFromServer = (serverSession = null) => {
   if (!serverSession?.id) return;
   const nextId = String(serverSession.id);
@@ -2089,12 +2126,32 @@ const requestApiResponse = async (incomingMessageElement, requestedModels = []) 
         messageTextElement,
         incomingMessageElement
       );
-      appendMessageToActiveSession({
-        role: "assistant",
-        model: normalizedRequestedModels[0] || "mimo",
-        content: streamResult?.content || "",
-        reasoning_content: streamResult?.reasoning || "",
-      });
+      const streamModelResponses = extractAssistantModelResponsesFromSession(
+        streamResult?.session || null,
+        normalizedRequestedModels
+      );
+      if (streamModelResponses.length > 1) {
+        const picked = pickModelResponse(
+          streamModelResponses,
+          normalizedRequestedModels[0] || streamModelResponses[0]?.model
+        );
+        setupAssistantModelTrack(incomingMessageElement, streamModelResponses, picked.model);
+        renderAssistantPayloadIntoElement(incomingMessageElement, picked);
+        appendAssistantResponsesToActiveSession(streamModelResponses, picked.model);
+      } else {
+        const single = streamModelResponses[0] || {
+          model: normalizedRequestedModels[0] || "mimo",
+          content: streamResult?.content || "",
+          reasoning_content: streamResult?.reasoning || "",
+        };
+        setupAssistantModelTrack(incomingMessageElement, [single], single.model);
+        appendMessageToActiveSession({
+          role: "assistant",
+          model: single.model,
+          content: single.content || "",
+          reasoning_content: single.reasoning_content || "",
+        });
+      }
       syncActiveSessionFromServer(streamResult?.session || null);
       return;
     }
@@ -2116,18 +2173,25 @@ const requestApiResponse = async (incomingMessageElement, requestedModels = []) 
       .filter((item) => item.model && (item.content || item.reasoning_content));
     if (modelResponses.length === 0) throw new Error("Invalid API response.");
     incomingMessageElement.classList.remove("message--loading");
-    const actionsElement = incomingMessageElement.querySelector(".message__actions");
-    actionsElement?.classList.remove("hide");
     if (modelResponses.length > 1) {
+      const picked = pickModelResponse(
+        modelResponses,
+        normalizedRequestedModels[0] || modelResponses[0].model
+      );
       setupAssistantModelTrack(
         incomingMessageElement,
         modelResponses,
-        modelResponses[0].model
+        picked.model
       );
-      renderAssistantPayloadIntoElement(incomingMessageElement, modelResponses[0]);
-      appendAssistantResponsesToActiveSession(modelResponses, modelResponses[0].model);
-      isGeneratingResponse = false;
-      scrollChatsToBottom("auto");
+      showTypingEffect(
+        picked.content || "",
+        marked.parse(picked.content || ""),
+        messageTextElement,
+        incomingMessageElement,
+        false,
+        picked.reasoning_content || ""
+      );
+      appendAssistantResponsesToActiveSession(modelResponses, picked.model);
     } else {
       const single = modelResponses[0];
       showTypingEffect(
@@ -2204,6 +2268,10 @@ const displayLoadingAnimation = (requestModels = []) => {
         <div class="message__content">
             <img class="message__avatar" src="assets/YoooFind.png" alt="Gemini avatar">
             <div class="message__body">
+                <div class="message__model-track hide">
+                    <div class="message__model-track-label">回答轨道</div>
+                    <div class="message__model-tabs"></div>
+                </div>
                 <div class="message__reasoning hide">
                     <div class="message__reasoning-header">
                         <div class="message__reasoning-title">深度思考</div>
@@ -2238,6 +2306,28 @@ const displayLoadingAnimation = (requestModels = []) => {
   if (thinkingStatusElement) {
     const labels = normalizeModelSelection(requestModels).map((key) => getModelLabel(key));
     thinkingStatusElement.textContent = `正在向 ${labels.join(" / ")} 请求回答...`;
+  }
+  const requestModelKeys = normalizeModelSelection(requestModels);
+  if (requestModelKeys.length > 1) {
+    const trackElement = loadingMessageElement.querySelector(".message__model-track");
+    const tabsElement = loadingMessageElement.querySelector(".message__model-tabs");
+    if (trackElement && tabsElement) {
+      trackElement.classList.remove("hide");
+      tabsElement.innerHTML = requestModelKeys
+        .map(
+          (modelKey, index) => `
+        <button
+          type="button"
+          class="message__model-tab ${index === 0 ? "is-active" : ""}"
+          data-model-tab="${escapeHtml(modelKey)}"
+          disabled
+        >
+          ${escapeHtml(getModelLabel(modelKey))}
+        </button>
+      `
+        )
+        .join("");
+    }
   }
   showReasoningLoading(loadingMessageElement);
   scrollChatsToBottom("smooth");
