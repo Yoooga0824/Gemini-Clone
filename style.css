@@ -998,7 +998,7 @@ body.sidebar-collapsed .sidebar__brand-title{
 }
 
 body.sidebar-collapsed .sidebar__brand:hover .sidebar__brand-logo{
-    opacity: 1;
+    opacity: 0;
 }
 
 body.sidebar-collapsed .sidebar__collapse-btn{
