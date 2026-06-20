@@ -38,7 +38,7 @@ func (h *ChatHandler) PostChat(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	if wantsStreamResponse(r) && len(req.Models) <= 1 {
+	if wantsStreamResponse(r) {
 		h.postChatStream(w, r, req)
 		return
 	}
@@ -100,19 +100,21 @@ func (h *ChatHandler) postChatStream(w http.ResponseWriter, r *http.Request, req
 	}
 
 	userID := middleware.UserIDFromContext(r.Context())
-	reply, session, err := h.chatService.StreamReply(
+	replies, session, err := h.chatService.StreamReplyMulti(
 		r.Context(),
 		userID,
 		req.SessionID,
 		req.Message,
-		firstModelOrFallback(req.Models),
-		func(delta model.AssistantReplyDelta) error {
+		req.Models,
+		func(modelKey string, delta model.AssistantReplyDelta) error {
 			return sendEvent(map[string]string{
 				"type":              "delta",
+				"model":             modelKey,
 				"content":           delta.Content,
 				"reasoning_content": delta.ReasoningContent,
 			})
-		})
+		},
+	)
 	if err != nil {
 		_ = sendEvent(map[string]string{
 			"type":  "error",
@@ -121,11 +123,23 @@ func (h *ChatHandler) postChatStream(w http.ResponseWriter, r *http.Request, req
 		return
 	}
 
+	selectedModel := ""
+	selectedContent := ""
+	selectedReasoning := ""
+	var selectedUsage *model.TokenUsage
+	if len(replies) > 0 {
+		selectedModel = replies[0].Model
+		selectedContent = replies[0].Content
+		selectedReasoning = replies[0].ReasoningContent
+		selectedUsage = replies[0].Usage
+	}
 	_ = sendEvent(map[string]any{
 		"type":              "done",
-		"content":           reply.Content,
-		"reasoning_content": reply.ReasoningContent,
-		"usage":             reply.Usage,
+		"content":           selectedContent,
+		"reasoning_content": selectedReasoning,
+		"usage":             selectedUsage,
+		"model_responses":   replies,
+		"selected_model":    selectedModel,
 		"session":           session,
 	})
 }

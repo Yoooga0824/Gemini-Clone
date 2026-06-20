@@ -266,6 +266,136 @@ func (s *ChatService) StreamReply(
 	return reply, session, nil
 }
 
+func (s *ChatService) StreamReplyMulti(
+	ctx context.Context,
+	userID int64,
+	sessionID int64,
+	userMessage string,
+	requestedModels []string,
+	onDelta func(modelKey string, delta model.AssistantReplyDelta) error,
+) ([]model.ModelAssistantResponse, model.ChatSessionSummary, error) {
+	trimmed := strings.TrimSpace(userMessage)
+	if trimmed == "" {
+		return nil, model.ChatSessionSummary{}, fmt.Errorf("message cannot be empty")
+	}
+	if userID <= 0 {
+		return nil, model.ChatSessionSummary{}, fmt.Errorf("user not authenticated")
+	}
+
+	modelKeys, err := s.normalizeRequestedModels(requestedModels)
+	if err != nil {
+		return nil, model.ChatSessionSummary{}, err
+	}
+	session, err := s.ensureSession(ctx, userID, sessionID, trimmed)
+	if err != nil {
+		return nil, model.ChatSessionSummary{}, err
+	}
+	contextMessage, err := s.buildMessageWithRecentTurns(ctx, userID, session.ID, trimmed)
+	if err != nil {
+		return nil, model.ChatSessionSummary{}, err
+	}
+
+	type modelRunResult struct {
+		Index int
+		Item  model.ModelAssistantResponse
+		Err   error
+	}
+	resultsChan := make(chan modelRunResult, len(modelKeys))
+	var wg sync.WaitGroup
+
+	for idx, modelKey := range modelKeys {
+		wg.Add(1)
+		go func(i int, key string) {
+			defer wg.Done()
+			generator, ok := s.generators[key]
+			if !ok {
+				resultsChan <- modelRunResult{
+					Index: i,
+					Err:   fmt.Errorf("model %s is unavailable", key),
+				}
+				return
+			}
+			reply, runErr := generator.StreamReply(ctx, contextMessage, func(delta model.AssistantReplyDelta) error {
+				if onDelta == nil {
+					return nil
+				}
+				return onDelta(key, delta)
+			})
+			if runErr != nil {
+				resultsChan <- modelRunResult{
+					Index: i,
+					Err:   fmt.Errorf("%s: %w", key, runErr),
+				}
+				return
+			}
+			resultsChan <- modelRunResult{
+				Index: i,
+				Item: model.ModelAssistantResponse{
+					Model:            key,
+					Content:          reply.Content,
+					ReasoningContent: reply.ReasoningContent,
+					Usage:            ensureTokenUsage(reply.Usage, contextMessage, reply),
+				},
+			}
+		}(idx, modelKey)
+	}
+
+	wg.Wait()
+	close(resultsChan)
+
+	successes := make([]modelRunResult, 0, len(modelKeys))
+	errorsByModel := make([]string, 0)
+	for result := range resultsChan {
+		if result.Err != nil {
+			errorsByModel = append(errorsByModel, result.Err.Error())
+			continue
+		}
+		successes = append(successes, result)
+	}
+	sort.Slice(successes, func(i, j int) bool {
+		return successes[i].Index < successes[j].Index
+	})
+	if len(successes) == 0 {
+		return nil, model.ChatSessionSummary{}, fmt.Errorf("all model requests failed: %s", strings.Join(errorsByModel, " | "))
+	}
+
+	assistantReplies := make([]model.ModelAssistantResponse, 0, len(successes))
+	for _, item := range successes {
+		assistantReplies = append(assistantReplies, item.Item)
+	}
+
+	primary := assistantReplies[0]
+	assistantContent := primary.Content
+	assistantReasoning := primary.ReasoningContent
+	if len(assistantReplies) > 1 {
+		payloadText, marshalErr := model.BuildPersistedAssistantContent(primary.Model, assistantReplies)
+		if marshalErr != nil {
+			return nil, model.ChatSessionSummary{}, fmt.Errorf("encode multi model payload: %w", marshalErr)
+		}
+		assistantContent = payloadText
+		assistantReasoning = ""
+	}
+	if err := s.store.SaveTurn(ctx, userID, session.ID, trimmed, assistantContent, assistantReasoning); err != nil {
+		return nil, model.ChatSessionSummary{}, err
+	}
+	if err := s.syncSessionTitle(ctx, userID, session, trimmed); err != nil {
+		return nil, model.ChatSessionSummary{}, err
+	}
+	session, err = s.store.GetSession(ctx, userID, session.ID)
+	if err != nil {
+		return nil, model.ChatSessionSummary{}, err
+	}
+	if s.usageService != nil {
+		for _, item := range assistantReplies {
+			if item.Usage == nil || item.Usage.TotalTokens <= 0 {
+				continue
+			}
+			_ = s.usageService.RecordChatUsage(ctx, userID, item.Usage, item.Model)
+		}
+	}
+	return assistantReplies, session, nil
+}
+
 func (s *ChatService) normalizeSingleModel(input string) (string, error) {
 	models, err := s.normalizeRequestedModels([]string{input})
 	if err != nil {

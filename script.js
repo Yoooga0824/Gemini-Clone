@@ -982,6 +982,17 @@ const pickModelResponse = (responses = [], preferredModel = "") => {
   };
 };
 
+const normalizeModelResponses = (responses = [], fallbackModels = []) =>
+  (responses || [])
+    .map((item, index) => ({
+      model: String(item?.model || fallbackModels[index] || fallbackModels[0] || "mimo")
+        .trim()
+        .toLowerCase(),
+      content: item?.content || "",
+      reasoning_content: item?.reasoning_content || "",
+    }))
+    .filter((item) => item.model && (item.content || item.reasoning_content));
+
 const renderAssistantPayloadIntoElement = (incomingMessageElement, response = {}) => {
   const messageTextElement = incomingMessageElement.querySelector(".message__text");
   if (!messageTextElement) return;
@@ -2057,6 +2068,190 @@ const consumeAssistantEventStream = async (
   };
 };
 
+const consumeAssistantEventStreamMulti = async (
+  response,
+  messageElement,
+  incomingMessageElement,
+  requestedModels = []
+) => {
+  if (!response.body) {
+    throw new Error("stream body unavailable");
+  }
+
+  const actionsElement = incomingMessageElement.querySelector(".message__actions");
+  actionsElement?.classList.add("hide");
+  const trackElement = incomingMessageElement.querySelector(".message__model-track");
+  const tabsElement = incomingMessageElement.querySelector(".message__model-tabs");
+
+  const modelOrder = normalizeModelSelection(requestedModels);
+  const trackStates = new Map(
+    modelOrder.map((modelKey) => [modelKey, { model: modelKey, content: "", reasoning_content: "", done: false }])
+  );
+  let activeModel = modelOrder[0] || "mimo";
+  let streamStarted = false;
+  let resolvedSession = null;
+
+  const ensureTrackState = (modelKey) => {
+    const key = String(modelKey || "").trim().toLowerCase();
+    if (!key) return null;
+    if (!trackStates.has(key)) {
+      trackStates.set(key, { model: key, content: "", reasoning_content: "", done: false });
+    }
+    return trackStates.get(key);
+  };
+
+  const renderTrackTabs = () => {
+    if (!trackElement || !tabsElement) return;
+    trackElement.classList.remove("hide");
+    const orderedModels = [...new Set([...modelOrder, ...trackStates.keys()])];
+    tabsElement.innerHTML = orderedModels
+      .map(
+        (modelKey) => `
+      <button
+        type="button"
+        class="message__model-tab ${modelKey === activeModel ? "is-active" : ""}"
+        data-model-tab="${escapeHtml(modelKey)}"
+      >
+        ${escapeHtml(getModelLabel(modelKey))}
+      </button>
+    `
+      )
+      .join("");
+  };
+
+  const renderActiveTrack = () => {
+    const state = trackStates.get(activeModel) || { content: "", reasoning_content: "" };
+    messageElement.innerHTML = marked.parse(state.content || "");
+    renderReasoningPanel(incomingMessageElement, state.reasoning_content || "", {
+      collapseByDefault: false,
+    });
+    scrollChatsToBottom("auto");
+  };
+
+  if (tabsElement) {
+    tabsElement.addEventListener("click", (event) => {
+      const tab = event.target.closest("[data-model-tab]");
+      if (!tab) return;
+      const nextModel = String(tab.dataset.modelTab || "").trim().toLowerCase();
+      if (!nextModel || nextModel === activeModel) return;
+      activeModel = nextModel;
+      renderTrackTabs();
+      renderActiveTrack();
+    });
+  }
+
+  renderTrackTabs();
+  renderActiveTrack();
+
+  const reader = response.body.getReader();
+  const decoder = new TextDecoder("utf-8");
+  let buffered = "";
+
+  while (true) {
+    const { value, done } = await reader.read();
+    if (done) break;
+
+    buffered += decoder.decode(value, { stream: true });
+    let boundaryIndex = buffered.indexOf("\n\n");
+    while (boundaryIndex !== -1) {
+      const rawEvent = buffered.slice(0, boundaryIndex);
+      buffered = buffered.slice(boundaryIndex + 2);
+
+      const dataPayload = rawEvent
+        .split("\n")
+        .map((line) => line.trim())
+        .filter((line) => line.startsWith("data:"))
+        .map((line) => line.slice(5).trim())
+        .join("\n");
+      if (!dataPayload) {
+        boundaryIndex = buffered.indexOf("\n\n");
+        continue;
+      }
+
+      let eventData;
+      try {
+        eventData = JSON.parse(dataPayload);
+      } catch {
+        boundaryIndex = buffered.indexOf("\n\n");
+        continue;
+      }
+
+      if (eventData.type === "error") {
+        throw new Error(eventData.error || "stream failed");
+      }
+
+      if (eventData.type === "delta") {
+        const state = ensureTrackState(eventData.model || activeModel);
+        if (!state) {
+          boundaryIndex = buffered.indexOf("\n\n");
+          continue;
+        }
+        if (typeof eventData.content === "string" && eventData.content) {
+          state.content += eventData.content;
+        }
+        if (typeof eventData.reasoning_content === "string" && eventData.reasoning_content) {
+          state.reasoning_content += eventData.reasoning_content;
+        }
+        if (!streamStarted) {
+          incomingMessageElement.classList.remove("message--loading");
+          streamStarted = true;
+        }
+        renderTrackTabs();
+        if (state.model === activeModel) {
+          renderActiveTrack();
+        }
+      }
+
+      if (eventData.type === "done") {
+        resolvedSession = eventData?.session || null;
+        const finalResponses = normalizeModelResponses(
+          eventData?.model_responses || [],
+          modelOrder
+        );
+        if (finalResponses.length > 0) {
+          trackStates.clear();
+          finalResponses.forEach((item) => {
+            trackStates.set(item.model, {
+              model: item.model,
+              content: item.content,
+              reasoning_content: item.reasoning_content,
+              done: true,
+            });
+          });
+          const selectedFromDone = String(eventData?.selected_model || "").trim().toLowerCase();
+          activeModel = trackStates.has(selectedFromDone)
+            ? selectedFromDone
+            : pickModelResponse(finalResponses, activeModel).model;
+        }
+        incomingMessageElement.classList.remove("message--loading");
+        renderTrackTabs();
+        renderActiveTrack();
+      }
+
+      boundaryIndex = buffered.indexOf("\n\n");
+    }
+  }
+
+  await enhanceMessageBody(messageElement);
+  actionsElement?.classList.remove("hide");
+  isGeneratingResponse = false;
+  scrollChatsToBottom("auto");
+
+  const modelResponses = [...trackStates.values()]
+    .map((item) => ({
+      model: item.model,
+      content: item.content || "",
+      reasoning_content: item.reasoning_content || "",
+    }))
+    .filter((item) => item.model && (item.content || item.reasoning_content));
+
+  return {
+    modelResponses,
+    selectedModel: activeModel,
+    session: resolvedSession,
+  };
+};
+
 // Fetch API response based on user input
 const requestApiResponse = async (incomingMessageElement, requestedModels = []) => {
   const messageTextElement =
@@ -2108,24 +2303,52 @@ const requestApiResponse = async (incomingMessageElement, requestedModels = []) 
     }
 
     if (responseContentType.includes("text/event-stream")) {
-      const streamResult = await consumeAssistantEventStream(
-        response,
-        messageTextElement,
-        incomingMessageElement
-      );
-      const streamModelResponses = extractAssistantModelResponsesFromSession(
-        streamResult?.session || null,
-        normalizedRequestedModels
-      );
-      if (streamModelResponses.length > 1) {
-        const picked = pickModelResponse(
-          streamModelResponses,
-          normalizedRequestedModels[0] || streamModelResponses[0]?.model
+      if (normalizedRequestedModels.length > 1) {
+        const multiStreamResult = await consumeAssistantEventStreamMulti(
+          response,
+          messageTextElement,
+          incomingMessageElement,
+          normalizedRequestedModels
         );
-        setupAssistantModelTrack(incomingMessageElement, streamModelResponses, picked.model);
-        renderAssistantPayloadIntoElement(incomingMessageElement, picked);
-        appendAssistantResponsesToActiveSession(streamModelResponses, picked.model);
+        const multiResponses = normalizeModelResponses(
+          multiStreamResult?.modelResponses || [],
+          normalizedRequestedModels
+        );
+        if (multiResponses.length > 1) {
+          appendAssistantResponsesToActiveSession(
+            multiResponses,
+            multiStreamResult?.selectedModel || multiResponses[0].model
+          );
+        } else if (multiResponses.length === 1) {
+          const single = multiResponses[0];
+          appendMessageToActiveSession({
+            role: "assistant",
+            model: single.model,
+            content: single.content || "",
+            reasoning_content: single.reasoning_content || "",
+          });
+        } else {
+          appendMessageToActiveSession({
+            role: "assistant",
+            model: normalizedRequestedModels[0] || "mimo",
+            content: "",
+            reasoning_content: "",
+          });
+        }
+        syncActiveSessionFromServer(multiStreamResult?.session || null);
       } else {
+        const streamResult = await consumeAssistantEventStream(
+          response,
+          messageTextElement,
+          incomingMessageElement
+        );
+        const streamModelResponses = normalizeModelResponses(
+          extractAssistantModelResponsesFromSession(
+            streamResult?.session || null,
+            normalizedRequestedModels
+          ),
+          normalizedRequestedModels
+        );
         const single = streamModelResponses[0] || {
           model: normalizedRequestedModels[0] || "mimo",
           content: streamResult?.content || "",
@@ -2138,8 +2361,8 @@ const requestApiResponse = async (incomingMessageElement, requestedModels = []) 
           content: single.content || "",
           reasoning_content: single.reasoning_content || "",
         });
+        syncActiveSessionFromServer(streamResult?.session || null);
       }
-      syncActiveSessionFromServer(streamResult?.session || null);
       return;
     }
 
