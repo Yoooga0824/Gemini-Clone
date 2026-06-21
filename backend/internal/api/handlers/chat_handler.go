@@ -118,6 +118,13 @@ func (h *ChatHandler) postChatStream(w http.ResponseWriter, r *http.Request, req
 				"reasoning_content": delta.ReasoningContent,
 			})
 		},
+		func(modelKey string, runErr error) error {
+			return sendEvent(map[string]string{
+				"type":  "model_error",
+				"model": modelKey,
+				"error": runErr.Error(),
+			})
+		},
 	)
 	if err != nil {
 		_ = sendEvent(map[string]string{

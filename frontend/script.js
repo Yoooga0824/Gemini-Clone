@@ -921,8 +921,9 @@ const appendAssistantResponsesToActiveSession = (responses = [], selectedModel =
       model: String(item?.model || "").trim().toLowerCase(),
       content: item?.content || "",
       reasoning_content: item?.reasoning_content || "",
+      error: item?.error || "",
     }))
-    .filter((item) => item.model && (item.content || item.reasoning_content));
+    .filter((item) => item.model && (item.content || item.reasoning_content || item.error));
   if (cleanedResponses.length === 0) {
     appendAssistantToActiveSession("", "");
     return;
@@ -959,8 +960,9 @@ const extractAssistantModelResponsesFromSession = (serverSession = null, fallbac
         .toLowerCase(),
       content: item?.content || "",
       reasoning_content: item?.reasoning_content || "",
+      error: item?.error || "",
     }))
-    .filter((item) => item.model && (item.content || item.reasoning_content));
+    .filter((item) => item.model && (item.content || item.reasoning_content || item.error));
 
   if (normalized.length > 0) return normalized;
   if (!latestAssistantMessage) return [];
@@ -1060,13 +1062,15 @@ const normalizeModelResponses = (responses = [], fallbackModels = []) =>
         .toLowerCase(),
       content: item?.content || "",
       reasoning_content: item?.reasoning_content || "",
+      error: item?.error || "",
     }))
-    .filter((item) => item.model && (item.content || item.reasoning_content));
+    .filter((item) => item.model && (item.content || item.reasoning_content || item.error));
 
 const renderAssistantPayloadIntoElement = (incomingMessageElement, response = {}) => {
   const messageTextElement = incomingMessageElement.querySelector(".message__text");
   if (!messageTextElement) return;
-  messageTextElement.innerHTML = marked.parse(response.content || "");
+  const fallbackErrorText = response.error ? `该模型回答失败：${response.error}` : "";
+  messageTextElement.innerHTML = marked.parse(response.content || fallbackErrorText);
   renderReasoningPanel(incomingMessageElement, response.reasoning_content || "", {
     collapseByDefault: true,
   });
@@ -1094,10 +1098,10 @@ const setupAssistantModelTrack = (
       (item) => `
       <button
         type="button"
-        class="message__model-tab ${item.model === picked.model ? "is-active" : ""}"
+        class="message__model-tab ${item.model === picked.model ? "is-active" : ""} ${item.error ? "is-error" : ""}"
         data-model-tab="${item.model}"
       >
-        ${escapeHtml(getModelLabel(item.model))}
+        ${escapeHtml(getModelLabel(item.model))}${item.error ? '<span class="message__model-tab-error-mark">!</span>' : ""}
       </button>
     `
     )
@@ -1122,8 +1126,9 @@ const renderAssistantMessage = (content = "", reasoning = "", options = {}) => {
         model: String(item?.model || "").trim().toLowerCase(),
         content: item?.content || "",
         reasoning_content: item?.reasoning_content || "",
+        error: item?.error || "",
       }))
-      .filter((item) => item.model && (item.content || item.reasoning_content))
+      .filter((item) => item.model && (item.content || item.reasoning_content || item.error))
     : [];
 
   const incomingMessageElement = createChatMessageElement(
@@ -2214,7 +2219,10 @@ const consumeAssistantEventStreamMulti = async (
 
   const modelOrder = normalizeModelSelection(requestedModels);
   const trackStates = new Map(
-    modelOrder.map((modelKey) => [modelKey, { model: modelKey, content: "", reasoning_content: "", done: false }])
+    modelOrder.map((modelKey) => [
+      modelKey,
+      { model: modelKey, content: "", reasoning_content: "", error: "", done: false },
+    ])
   );
   let activeModel = modelOrder[0] || "mimo";
   let tabsRenderKey = "";
@@ -2225,7 +2233,7 @@ const consumeAssistantEventStreamMulti = async (
     const key = String(modelKey || "").trim().toLowerCase();
     if (!key) return null;
     if (!trackStates.has(key)) {
-      trackStates.set(key, { model: key, content: "", reasoning_content: "", done: false });
+      trackStates.set(key, { model: key, content: "", reasoning_content: "", error: "", done: false });
     }
     return trackStates.get(key);
   };
@@ -2239,22 +2247,26 @@ const consumeAssistantEventStreamMulti = async (
     tabsRenderKey = nextRenderKey;
     tabsElement.innerHTML = orderedModels
       .map(
-        (modelKey) => `
+        (modelKey) => {
+          const modelState = trackStates.get(modelKey);
+          return `
       <button
         type="button"
-        class="message__model-tab ${modelKey === activeModel ? "is-active" : ""}"
+        class="message__model-tab ${modelKey === activeModel ? "is-active" : ""} ${modelState?.error ? "is-error" : ""}"
         data-model-tab="${escapeHtml(modelKey)}"
       >
-        ${escapeHtml(getModelLabel(modelKey))}
+        ${escapeHtml(getModelLabel(modelKey))}${modelState?.error ? '<span class="message__model-tab-error-mark">!</span>' : ""}
       </button>
-    `
+    `;
+        }
       )
       .join("");
   };
 
   const renderActiveTrack = () => {
-    const state = trackStates.get(activeModel) || { content: "", reasoning_content: "" };
-    messageElement.innerHTML = marked.parse(state.content || "");
+    const state = trackStates.get(activeModel) || { content: "", reasoning_content: "", error: "" };
+    const fallbackErrorText = state.error ? `该模型回答失败：${state.error}` : "";
+    messageElement.innerHTML = marked.parse(state.content || fallbackErrorText);
     renderReasoningPanel(incomingMessageElement, state.reasoning_content || "", {
       collapseByDefault: false,
       streaming: true,
@@ -2337,7 +2349,48 @@ const consumeAssistantEventStreamMulti = async (
         if (!knownModelBefore) {
           renderTrackTabs();
         }
+        const activeState = trackStates.get(activeModel);
+        const activeBlockedByError =
+          !!activeState &&
+          !!activeState.error &&
+          !activeState.content &&
+          !activeState.reasoning_content;
+        if (activeBlockedByError && deltaModel !== activeModel) {
+          activeModel = deltaModel;
+          renderTrackTabs();
+        }
         if (state.model === activeModel) {
+          renderActiveTrack();
+        }
+      }
+
+      if (eventData.type === "model_error") {
+        const failedModel = String(eventData.model || "").trim().toLowerCase();
+        const state = ensureTrackState(failedModel);
+        if (!state) {
+          boundaryIndex = buffered.indexOf("\n\n");
+          continue;
+        }
+        state.error = String(eventData.error || "请求失败");
+        state.done = true;
+        if (!streamStarted) {
+          incomingMessageElement.classList.remove("message--loading");
+          streamStarted = true;
+        }
+        if (failedModel === activeModel) {
+          const fallback = [...trackStates.values()].find(
+            (item) =>
+              item.model !== failedModel &&
+              (String(item.content || "").trim() || String(item.reasoning_content || "").trim())
+          );
+          if (fallback?.model) {
+            activeModel = fallback.model;
+          }
+        }
+        renderTrackTabs();
+        if (failedModel === activeModel) {
+          renderActiveTrack();
+        } else {
           renderActiveTrack();
         }
       }
@@ -2349,12 +2402,19 @@ const consumeAssistantEventStreamMulti = async (
           modelOrder
         );
         if (finalResponses.length > 0) {
-          trackStates.clear();
           finalResponses.forEach((item) => {
+            const existingState = trackStates.get(item.model) || {
+              model: item.model,
+              content: "",
+              reasoning_content: "",
+              error: "",
+              done: false,
+            };
             trackStates.set(item.model, {
               model: item.model,
               content: item.content,
               reasoning_content: item.reasoning_content,
+              error: existingState.error || item.error || "",
               done: true,
             });
           });
@@ -2382,8 +2442,9 @@ const consumeAssistantEventStreamMulti = async (
       model: item.model,
       content: item.content || "",
       reasoning_content: item.reasoning_content || "",
+      error: item.error || "",
     }))
-    .filter((item) => item.model && (item.content || item.reasoning_content));
+    .filter((item) => item.model && (item.content || item.reasoning_content || item.error));
 
   return {
     modelResponses,

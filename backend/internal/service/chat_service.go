@@ -110,7 +110,7 @@ func (s *ChatService) ReplyMulti(
 		return nil, model.ChatSessionSummary{}, fmt.Errorf("user not authenticated")
 	}
 
-	modelKeys, err := s.normalizeRequestedModels(requestedModels)
+	modelKeys, _, err := s.resolveRequestedModels(requestedModels)
 	if err != nil {
 		return nil, model.ChatSessionSummary{}, err
 	}
@@ -124,7 +124,7 @@ func (s *ChatService) ReplyMulti(
 		return nil, model.ChatSessionSummary{}, err
 	}
 
-	assistantReplies, err := s.collectModelReplies(ctx, contextMessage, modelKeys, false, nil)
+	assistantReplies, err := s.collectModelReplies(ctx, contextMessage, modelKeys, false, nil, nil)
 	if err != nil {
 		return nil, model.ChatSessionSummary{}, err
 	}
@@ -194,6 +194,7 @@ func (s *ChatService) StreamReplyMulti(
 	userMessage string,
 	requestedModels []string,
 	onDelta func(modelKey string, delta model.AssistantReplyDelta) error,
+	onModelError func(modelKey string, err error) error,
 ) ([]model.ModelAssistantResponse, model.ChatSessionSummary, error) {
 	trimmed := strings.TrimSpace(userMessage)
 	if trimmed == "" {
@@ -203,9 +204,14 @@ func (s *ChatService) StreamReplyMulti(
 		return nil, model.ChatSessionSummary{}, fmt.Errorf("user not authenticated")
 	}
 
-	modelKeys, err := s.normalizeRequestedModels(requestedModels)
+	modelKeys, unsupportedModels, err := s.resolveRequestedModels(requestedModels)
 	if err != nil {
 		return nil, model.ChatSessionSummary{}, err
+	}
+	if onModelError != nil {
+		for _, modelKey := range unsupportedModels {
+			_ = onModelError(modelKey, fmt.Errorf("model %s is unavailable", modelKey))
+		}
 	}
 	session, err := s.ensureSession(ctx, userID, sessionID, trimmed)
 	if err != nil {
@@ -216,7 +222,14 @@ func (s *ChatService) StreamReplyMulti(
 		return nil, model.ChatSessionSummary{}, err
 	}
 
-	assistantReplies, err := s.collectModelReplies(ctx, contextMessage, modelKeys, true, onDelta)
+	assistantReplies, err := s.collectModelReplies(
+		ctx,
+		contextMessage,
+		modelKeys,
+		true,
+		onDelta,
+		onModelError,
+	)
 	if err != nil {
 		return nil, model.ChatSessionSummary{}, err
 	}
@@ -233,6 +246,7 @@ func (s *ChatService) collectModelReplies(
 	modelKeys []string,
 	useStream bool,
 	onDelta func(modelKey string, delta model.AssistantReplyDelta) error,
+	onModelError func(modelKey string, err error) error,
 ) ([]model.ModelAssistantResponse, error) {
 	// 并发执行模型请求并按前端选择顺序归并结果。
 	resultsChan := make(chan modelRunResult, len(modelKeys))
@@ -266,6 +280,9 @@ func (s *ChatService) collectModelReplies(
 				reply, runErr = generator.GenerateReply(ctx, contextMessage)
 			}
 			if runErr != nil {
+				if onModelError != nil {
+					_ = onModelError(key, runErr)
+				}
 				resultsChan <- modelRunResult{
 					Index: i,
 					Err:   fmt.Errorf("%s: %w", key, runErr),
@@ -408,6 +425,41 @@ func (s *ChatService) normalizeRequestedModels(input []string) ([]string, error)
 		return []string{key}, nil
 	}
 	return nil, fmt.Errorf("no models available")
+}
+
+func (s *ChatService) resolveRequestedModels(input []string) ([]string, []string, error) {
+	const maxModelsPerRequest = 3
+	seen := map[string]struct{}{}
+	supported := make([]string, 0, maxModelsPerRequest)
+	unsupported := make([]string, 0)
+
+	for _, item := range input {
+		key := strings.TrimSpace(strings.ToLower(item))
+		if key == "" {
+			continue
+		}
+		if _, ok := seen[key]; ok {
+			continue
+		}
+		seen[key] = struct{}{}
+		if _, ok := s.generators[key]; ok {
+			supported = append(supported, key)
+		} else {
+			unsupported = append(unsupported, key)
+		}
+		if len(supported)+len(unsupported) >= maxModelsPerRequest {
+			break
+		}
+	}
+
+	if len(supported) > 0 {
+		return supported, unsupported, nil
+	}
+	if len(input) > 0 {
+		return nil, unsupported, fmt.Errorf("no models available in selection")
+	}
+	defaultModels, err := s.normalizeRequestedModels(nil)
+	return defaultModels, nil, err
 }
 
 func (s *ChatService) ListSessions(ctx context.Context, userID int64) ([]model.ChatSessionSummary, error) {

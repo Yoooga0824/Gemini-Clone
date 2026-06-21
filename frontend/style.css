@@ -1363,6 +1363,16 @@ body.sidebar-collapsed .sidebar__brand:hover .sidebar__expand-btn{
     background: linear-gradient(135deg, #3b82f6 0%, #8b5cf6 62%, #ec4899 100%);
 }
 
+.chats .message__model-tab.is-error{
+    border-color: color-mix(in srgb, #f87171 46%, var(--secondary-hover-color));
+}
+
+.chats .message__model-tab-error-mark{
+    margin-left: 0.28rem;
+    color: #f87171;
+    font-weight: 700;
+}
+
 .chats .message__text{
     color: var(--text-color);
     white-space: pre-wrap;
