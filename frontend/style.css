@@ -293,12 +293,37 @@ body.hide-header .header{
 }
 
 .model-picker__title{
+    display: inline-flex;
+    align-items: center;
+    gap: 0.26rem;
     font-size: 1.14rem;
     font-weight: 500;
     max-width: none;
     white-space: nowrap;
     overflow: visible;
     text-overflow: clip;
+}
+
+.model-picker__summary-item{
+    display: inline-flex;
+    align-items: center;
+    gap: 0.28rem;
+}
+
+.model-picker__summary-icon{
+    width: 0.9em;
+    height: 0.9em;
+    object-fit: contain;
+    flex: 0 0 auto;
+}
+
+.model-picker__summary-label{
+    line-height: 1;
+}
+
+.model-picker__summary-separator{
+    opacity: 0.65;
+    margin: 0 0.05rem;
 }
 
 .model-picker__panel{

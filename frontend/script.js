@@ -73,6 +73,7 @@ import {
   MAX_SELECTED_MODELS,
   MODEL_CATALOG,
   MODEL_LABELS,
+  getModelIcon,
   getModelLabel,
   normalizeModelSelection,
 } from "./src/model-catalog.js";
@@ -151,8 +152,36 @@ const saveModelSelection = () => {
 
 const renderModelPickerSummary = () => {
   if (!modelPickerSummary) return;
-  const labels = selectedModelKeys.map((key) => getModelLabel(key));
-  modelPickerSummary.textContent = labels.join(" + ");
+  modelPickerSummary.textContent = "";
+  selectedModelKeys.forEach((key, index) => {
+    const item = document.createElement("span");
+    item.className = "model-picker__summary-item";
+
+    const icon = getModelIcon(key);
+    if (icon) {
+      const iconImage = document.createElement("img");
+      iconImage.className = "model-picker__summary-icon";
+      iconImage.src = icon;
+      iconImage.alt = "";
+      iconImage.loading = "lazy";
+      iconImage.decoding = "async";
+      iconImage.setAttribute("aria-hidden", "true");
+      item.appendChild(iconImage);
+    }
+
+    const label = document.createElement("span");
+    label.className = "model-picker__summary-label";
+    label.textContent = getModelLabel(key);
+    item.appendChild(label);
+    modelPickerSummary.appendChild(item);
+
+    if (index < selectedModelKeys.length - 1) {
+      const separator = document.createElement("span");
+      separator.className = "model-picker__summary-separator";
+      separator.textContent = "+";
+      modelPickerSummary.appendChild(separator);
+    }
+  });
 };
 
 const syncModelPickerOptionStates = () => {

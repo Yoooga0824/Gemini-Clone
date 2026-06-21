@@ -15,8 +15,15 @@ export const MODEL_LABELS = MODEL_CATALOG.reduce((labels, item) => {
   return labels;
 }, {});
 
+export const MODEL_ICONS = MODEL_CATALOG.reduce((icons, item) => {
+  icons[item.key] = item.icon || "";
+  return icons;
+}, {});
+
 export const getModelLabel = (modelKey = "") =>
   MODEL_LABELS[modelKey] || modelKey || "未知模型";
+
+export const getModelIcon = (modelKey = "") => MODEL_ICONS[modelKey] || "";
 
 export const normalizeModelSelection = (inputModels = []) => {
   const seen = new Set();
