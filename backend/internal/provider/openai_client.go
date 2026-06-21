@@ -31,6 +31,8 @@ type OpenAICompatibleClient struct {
 	httpClient  *http.Client
 }
 
+const upstreamRequestTimeout = 45 * time.Second
+
 // NewOpenAICompatibleClient creates a reusable API client.
 func NewOpenAICompatibleClient(
 	baseURL, path, apiKey, model string,
@@ -45,7 +47,9 @@ func NewOpenAICompatibleClient(
 		maxTokens:   maxTokens,
 		temperature: temperature,
 		httpClient: &http.Client{
-			Timeout: 45 * time.Second,
+			// Streaming requests should not be cut off by a fixed client timeout.
+			// We keep a per-request timeout for non-stream calls.
+			Timeout: 0,
 		},
 	}
 }
@@ -106,6 +110,9 @@ var thinkTagPattern = regexp.MustCompile(`(?s)<think>\s*(.*?)\s*</think>`)
 
 // GenerateReply sends user message to upstream LLM and returns separated answer/reasoning text.
 func (c *OpenAICompatibleClient) GenerateReply(ctx context.Context, userMessage string) (model.AssistantReply, error) {
+	ctxWithTimeout, cancel := context.WithTimeout(ctx, upstreamRequestTimeout)
+	defer cancel()
+
 	payload := chatRequest{
 		Model: c.model,
 		Messages: []chatMessage{
@@ -121,7 +128,7 @@ func (c *OpenAICompatibleClient) GenerateReply(ctx context.Context, userMessage 
 	}
 
 	url := c.baseURL + c.path
-	req, err := http.NewRequestWithContext(ctx, http.MethodPost, url, bytes.NewReader(bodyBytes))
+	req, err := http.NewRequestWithContext(ctxWithTimeout, http.MethodPost, url, bytes.NewReader(bodyBytes))
 	if err != nil {
 		return model.AssistantReply{}, fmt.Errorf("create upstream request: %w", err)
 	}

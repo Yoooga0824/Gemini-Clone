@@ -2426,6 +2426,7 @@ const consumeAssistantEventStreamMulti = async (
 
       if (eventData.type === "done") {
         resolvedSession = eventData?.session || null;
+        const activeBeforeDone = activeModel;
         const finalResponses = normalizeModelResponses(
           eventData?.model_responses || [],
           modelOrder
@@ -2448,9 +2449,13 @@ const consumeAssistantEventStreamMulti = async (
             });
           });
           const selectedFromDone = String(eventData?.selected_model || "").trim().toLowerCase();
-          activeModel = trackStates.has(selectedFromDone)
-            ? selectedFromDone
-            : pickModelResponse(finalResponses, activeModel).model;
+          if (trackStates.has(activeBeforeDone)) {
+            activeModel = activeBeforeDone;
+          } else if (trackStates.has(selectedFromDone)) {
+            activeModel = selectedFromDone;
+          } else {
+            activeModel = pickModelResponse(finalResponses, activeBeforeDone).model;
+          }
         }
         incomingMessageElement.classList.remove("message--loading");
         renderTrackTabs();
