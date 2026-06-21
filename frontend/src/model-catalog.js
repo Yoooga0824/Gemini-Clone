@@ -6,6 +6,7 @@ export const MODEL_CATALOG = [
   { key: "doubao", label: "豆包", icon: "assets/Doubao.png" },
   { key: "kimi", label: "Kimi", icon: "assets/Kimi.png" },
   { key: "qwen", label: "千问", icon: "assets/Qwen.png" },
+  { key: "glm", label: "智谱GLM", icon: "assets/GLM.png" },
   { key: "mimo", label: "Mimo", icon: "assets/Mimo.png" },
 ];
 

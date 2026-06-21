@@ -74,6 +74,13 @@ var providerCatalog = []ProviderBlueprint{
 		DefaultPath:    "/v1/chat/completions",
 		DefaultModel:   "mimo-v2.5-pro",
 	},
+	{
+		Key:            "glm",
+		EnvPrefix:      "GLM",
+		DefaultBaseURL: "https://open.bigmodel.cn/api/paas",
+		DefaultPath:    "/v4/chat/completions",
+		DefaultModel:   "glm-4-flash",
+	},
 }
 
 func Load() (Config, error) {
