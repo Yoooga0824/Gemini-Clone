@@ -174,18 +174,23 @@ const renderModelPickerSummary = () => {
   modelPickerSummary.textContent = labels.join(" + ");
 };
 
-const syncModelPickerCheckboxes = () => {
+const syncModelPickerOptionStates = () => {
   if (!modelPickerPanel) return;
-  modelPickerPanel.querySelectorAll("[data-model-option]").forEach((input) => {
-    input.checked = selectedModelKeys.includes(input.value);
-    input.disabled = !input.checked && selectedModelKeys.length >= MAX_SELECTED_MODELS;
+  modelPickerPanel.querySelectorAll("[data-model-option]").forEach((option) => {
+    const modelKey = String(option.dataset.modelKey || "");
+    const isSelected = selectedModelKeys.includes(modelKey);
+    const isDisabled = !isSelected && selectedModelKeys.length >= MAX_SELECTED_MODELS;
+    option.classList.toggle("is-selected", isSelected);
+    option.classList.toggle("is-disabled", isDisabled);
+    option.setAttribute("aria-pressed", isSelected ? "true" : "false");
+    option.setAttribute("aria-disabled", isDisabled ? "true" : "false");
   });
 };
 
 const setSelectedModels = (nextModels = []) => {
   selectedModelKeys = normalizeModelSelection(nextModels);
   renderModelPickerSummary();
-  syncModelPickerCheckboxes();
+  syncModelPickerOptionStates();
   saveModelSelection();
 };
 
@@ -194,10 +199,21 @@ const renderModelPickerOptions = () => {
   modelPickerOptions.innerHTML = MODEL_CATALOG
     .map(
       (item) => `
-        <label class="model-picker__option">
-          <input type="checkbox" value="${escapeHtml(item.key)}" data-model-option />
-          <span>${escapeHtml(item.label)}</span>
-        </label>
+        <button
+          type="button"
+          class="model-picker__option"
+          data-model-option
+          data-model-key="${escapeHtml(item.key)}"
+          aria-pressed="false"
+          aria-disabled="false"
+        >
+          <span class="model-picker__option-label">${escapeHtml(item.label)}</span>
+          <span class="model-picker__option-check" aria-hidden="true">
+            <svg viewBox="0 0 20 20" focusable="false">
+              <path d="M7.6 13.4 4.8 10.6a1 1 0 0 0-1.4 1.4l3.5 3.5a1 1 0 0 0 1.4 0l8.2-8.2a1 1 0 0 0-1.4-1.4z"></path>
+            </svg>
+          </span>
+        </button>
       `
     )
     .join("");
@@ -1735,16 +1751,25 @@ const bindModelPickerEvents = () => {
     modelPickerTrigger?.setAttribute("aria-expanded", isOpening ? "true" : "false");
   });
 
-  modelPickerPanel?.addEventListener("change", (event) => {
+  modelPickerPanel?.addEventListener("click", (event) => {
     const option = event.target.closest("[data-model-option]");
     if (!option) return;
+    const modelKey = String(option.dataset.modelKey || "");
+    if (!MODEL_LABELS[modelKey]) return;
+
+    const isSelected = selectedModelKeys.includes(modelKey);
+    if (!isSelected && selectedModelKeys.length >= MAX_SELECTED_MODELS) {
+      return;
+    }
+    if (isSelected && selectedModelKeys.length === 1) {
+      return;
+    }
+
     let next = [...selectedModelKeys];
-    if (option.checked) {
-      if (!next.includes(option.value) && next.length < MAX_SELECTED_MODELS) {
-        next.push(option.value);
-      }
+    if (!isSelected) {
+      next.push(modelKey);
     } else {
-      next = next.filter((item) => item !== option.value);
+      next = next.filter((item) => item !== modelKey);
       if (next.length === 0) {
         next = ["mimo"];
       }
