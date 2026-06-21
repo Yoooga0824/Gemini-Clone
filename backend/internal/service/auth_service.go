@@ -35,7 +35,7 @@ func (s *AuthService) Register(ctx context.Context, req model.AuthRequest) (mode
 		return model.AuthResponse{}, fmt.Errorf("密码至少需要 6 位")
 	}
 	if _, err := s.users.GetByEmail(ctx, email); err == nil {
-		return model.AuthResponse{}, fmt.Errorf("该邮箱已注册")
+		return model.AuthResponse{}, fmt.Errorf("该邮箱已被注册")
 	} else if err != sql.ErrNoRows {
 		return model.AuthResponse{}, err
 	}
