@@ -260,13 +260,13 @@ body.hide-header .header{
     border: none;
     background: transparent;
     color: var(--text-secondary-color);
-    border-radius: 10px;
-    padding: 0.2rem 0.38rem;
+    border-radius: 12px;
+    padding: 0.4rem 0.62rem;
     min-width: 0;
     display: inline-flex;
     align-items: center;
     justify-content: flex-start;
-    gap: 0.32rem;
+    gap: 0.46rem;
     cursor: pointer;
     transition: background 0.15s ease, color 0.15s ease;
 }
@@ -282,7 +282,7 @@ body.hide-header .header{
 }
 
 .model-picker__trigger i{
-    font-size: 0.86rem;
+    font-size: 1.08rem;
     opacity: 0.58;
     transition: transform 0.2s ease, opacity 0.15s ease;
 }
@@ -293,7 +293,7 @@ body.hide-header .header{
 }
 
 .model-picker__title{
-    font-size: 0.93rem;
+    font-size: 1.14rem;
     font-weight: 500;
     max-width: none;
     white-space: nowrap;
@@ -2117,12 +2117,12 @@ td{
 
     .model-picker__trigger{
         min-width: 0;
-        padding: 0.16rem 0.3rem;
+        padding: 0.3rem 0.5rem;
     }
 
     .model-picker__title{
         max-width: none;
-        font-size: 0.86rem;
+        font-size: 1.02rem;
     }
 
     .model-picker__panel{
