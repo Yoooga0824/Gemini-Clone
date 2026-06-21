@@ -1423,7 +1423,8 @@ const handleProfileSubmit = async (event) => {
   currentUser = await response.json();
   persistCurrentUserProfile();
   applyUserProfileToUI();
-  setProfileStatusText("已保存");
+  setProfileStatusText("");
+  closeModal(profileModal);
 };
 
 const handleAvatarUpload = async (event) => {
