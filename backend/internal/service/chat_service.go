@@ -393,7 +393,7 @@ func (s *ChatService) normalizeSingleModel(input string) (string, error) {
 }
 
 func (s *ChatService) normalizeRequestedModels(input []string) ([]string, error) {
-	const maxModelsPerRequest = 3
+	const maxModelsPerRequest = 4
 	seen := map[string]struct{}{}
 	models := make([]string, 0, maxModelsPerRequest)
 	for _, item := range input {
@@ -428,7 +428,7 @@ func (s *ChatService) normalizeRequestedModels(input []string) ([]string, error)
 }
 
 func (s *ChatService) resolveRequestedModels(input []string) ([]string, []string, error) {
-	const maxModelsPerRequest = 3
+	const maxModelsPerRequest = 4
 	seen := map[string]struct{}{}
 	supported := make([]string, 0, maxModelsPerRequest)
 	unsupported := make([]string, 0)

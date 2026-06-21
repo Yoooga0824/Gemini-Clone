@@ -1,5 +1,5 @@
 // 模型目录模块：集中维护可选模型与选择规则，避免在入口脚本中重复定义。
-export const MAX_SELECTED_MODELS = 3;
+export const MAX_SELECTED_MODELS = 4;
 
 export const MODEL_CATALOG = [
   { key: "deepseek", label: "DeepSeek", icon: "assets/DeepSeek.svg" },
