@@ -98,11 +98,11 @@ const MOBILE_BREAKPOINT = 980;
 let shikiHighlighterPromise = null;
 const MAX_SELECTED_MODELS = 3;
 const MODEL_CATALOG = [
-  { key: "deepseek", label: "DeepSeek" },
-  { key: "doubao", label: "豆包" },
-  { key: "kimi", label: "Kimi" },
-  { key: "qwen", label: "千问" },
-  { key: "mimo", label: "Mimo" },
+  { key: "deepseek", label: "DeepSeek", icon: "assets/DeepSeek.svg" },
+  { key: "doubao", label: "豆包", icon: "assets/Doubao.png" },
+  { key: "kimi", label: "Kimi", icon: "assets/Kimi.png" },
+  { key: "qwen", label: "千问", icon: "assets/Qwen.png" },
+  { key: "mimo", label: "Mimo", icon: "assets/Mimo.png" },
 ];
 const MODEL_LABELS = MODEL_CATALOG.reduce((labels, item) => {
   labels[item.key] = item.label;
@@ -207,7 +207,17 @@ const renderModelPickerOptions = () => {
           aria-pressed="false"
           aria-disabled="false"
         >
-          <span class="model-picker__option-label">${escapeHtml(item.label)}</span>
+          <span class="model-picker__option-main">
+            <img
+              class="model-picker__option-icon"
+              src="${escapeHtml(item.icon || "")}"
+              alt=""
+              loading="lazy"
+              decoding="async"
+              aria-hidden="true"
+            />
+            <span class="model-picker__option-label">${escapeHtml(item.label)}</span>
+          </span>
           <span class="model-picker__option-check" aria-hidden="true">
             <svg viewBox="0 0 20 20" focusable="false">
               <path d="M7.6 13.4 4.8 10.6a1 1 0 0 0-1.4 1.4l3.5 3.5a1 1 0 0 0 1.4 0l8.2-8.2a1 1 0 0 0-1.4-1.4z"></path>
