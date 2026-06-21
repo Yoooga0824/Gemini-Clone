@@ -1715,7 +1715,7 @@ body.sidebar-collapsed .sidebar__brand:hover .sidebar__expand-btn{
 }
 
 .usage-summary{
-    margin-top: 0.8rem;
+    margin-top: 0.55rem;
     color: var(--text-color);
     font-size: 0.92rem;
 }

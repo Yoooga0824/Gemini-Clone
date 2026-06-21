@@ -1505,6 +1505,14 @@ const buildUsageYAxisRange = (series = []) => {
   };
 };
 
+const formatUsageDateLabel = (value) => {
+  if (!value) return "";
+  const normalized = String(value).trim();
+  if (!normalized) return "";
+  const [datePart] = normalized.split("T");
+  return datePart || normalized;
+};
+
 const usageValueLabelPlugin = {
   id: "usageValueLabelPlugin",
   afterDatasetsDraw(chart) {
@@ -1543,7 +1551,7 @@ const renderUsageChart = () => {
   let fillColor = "rgba(96, 165, 250, 0.20)";
 
   if (usageChartMode === "alltime") {
-    labels = (totalSummary?.by_day || []).map((item) => item.date);
+    labels = (totalSummary?.by_day || []).map((item) => formatUsageDateLabel(item.date));
     let runningTotal = 0;
     data = (totalSummary?.by_day || []).map((item) => {
       runningTotal += item?.total_tokens || 0;
@@ -1554,7 +1562,7 @@ const renderUsageChart = () => {
     pointColor = "#ec4899";
     fillColor = "rgba(139, 92, 246, 0.18)";
   } else {
-    labels = (recentSummary?.by_day || []).map((item) => item.date);
+    labels = (recentSummary?.by_day || []).map((item) => formatUsageDateLabel(item.date));
     data = (recentSummary?.by_day || []).map((item) => item.total_tokens);
     label = "近30天每日 Token";
   }
