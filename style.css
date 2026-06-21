@@ -367,7 +367,7 @@ body.hide-header .header{
 .model-picker__option-check{
     width: 1rem;
     height: 1rem;
-    color: #ffffff;
+    color: var(--text-color);
     opacity: 0;
     transform: scale(0.9);
     transition: opacity 0.16s ease, transform 0.16s ease;
