@@ -69,6 +69,13 @@ const FILE_ACCEPT =
   ".txt,.md,.json,.csv,.js,.ts,.tsx,.go,.py,.java,.c,.cpp,.html,.css,.xml,.yaml,.yml,.pdf";
 
 import config from "./config.js";
+import {
+  MAX_SELECTED_MODELS,
+  MODEL_CATALOG,
+  MODEL_LABELS,
+  getModelLabel,
+  normalizeModelSelection,
+} from "./src/model-catalog.js";
 
 // Initialize highlight.js fallback with common languages.
 hljs.configure({
@@ -97,18 +104,6 @@ const REASONING_SCROLL_FOLLOW_THRESHOLD = 20;
 const SHORT_CODE_BLOCK_MAX_CHARS = 72;
 const MOBILE_BREAKPOINT = 980;
 let shikiHighlighterPromise = null;
-const MAX_SELECTED_MODELS = 3;
-const MODEL_CATALOG = [
-  { key: "deepseek", label: "DeepSeek", icon: "assets/DeepSeek.svg" },
-  { key: "doubao", label: "豆包", icon: "assets/Doubao.png" },
-  { key: "kimi", label: "Kimi", icon: "assets/Kimi.png" },
-  { key: "qwen", label: "千问", icon: "assets/Qwen.png" },
-  { key: "mimo", label: "Mimo", icon: "assets/Mimo.png" },
-];
-const MODEL_LABELS = MODEL_CATALOG.reduce((labels, item) => {
-  labels[item.key] = item.label;
-  return labels;
-}, {});
 
 const SHIKI_LANGUAGES = [
   "javascript",
@@ -149,21 +144,6 @@ const escapeHtml = (text = "") =>
     .replace(/>/g, "&gt;")
     .replace(/"/g, "&quot;")
     .replace(/'/g, "&#39;");
-
-const getModelLabel = (modelKey = "") => MODEL_LABELS[modelKey] || modelKey || "未知模型";
-
-const normalizeModelSelection = (inputModels = []) => {
-  const seen = new Set();
-  const normalized = [];
-  (inputModels || []).forEach((item) => {
-    const key = String(item || "").trim().toLowerCase();
-    if (!MODEL_LABELS[key] || seen.has(key)) return;
-    seen.add(key);
-    normalized.push(key);
-  });
-  if (normalized.length === 0) return ["mimo"];
-  return normalized.slice(0, MAX_SELECTED_MODELS);
-};
 
 const saveModelSelection = () => {
   localStorage.setItem(MODEL_SELECTION_STORAGE_KEY, JSON.stringify(selectedModelKeys));

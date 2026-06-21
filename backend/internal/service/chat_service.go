@@ -39,6 +39,12 @@ type ChatService struct {
 	usageService *UsageService
 }
 
+type modelRunResult struct {
+	Index int
+	Item  model.ModelAssistantResponse
+	Err   error
+}
+
 func NewChatService(
 	generators map[string]Generator,
 	modelOrder []string,
@@ -118,96 +124,13 @@ func (s *ChatService) ReplyMulti(
 		return nil, model.ChatSessionSummary{}, err
 	}
 
-	type modelRunResult struct {
-		Index int
-		Item  model.ModelAssistantResponse
-		Err   error
-	}
-	resultsChan := make(chan modelRunResult, len(modelKeys))
-	var wg sync.WaitGroup
-	for idx, modelKey := range modelKeys {
-		wg.Add(1)
-		go func(i int, key string) {
-			defer wg.Done()
-			generator, ok := s.generators[key]
-			if !ok {
-				resultsChan <- modelRunResult{
-					Index: i,
-					Err:   fmt.Errorf("model %s is unavailable", key),
-				}
-				return
-			}
-			reply, runErr := generator.GenerateReply(ctx, contextMessage)
-			if runErr != nil {
-				resultsChan <- modelRunResult{
-					Index: i,
-					Err:   fmt.Errorf("%s: %w", key, runErr),
-				}
-				return
-			}
-			resultsChan <- modelRunResult{
-				Index: i,
-				Item: model.ModelAssistantResponse{
-					Model:            key,
-					Content:          reply.Content,
-					ReasoningContent: reply.ReasoningContent,
-					Usage:            ensureTokenUsage(reply.Usage, contextMessage, reply),
-				},
-			}
-		}(idx, modelKey)
-	}
-	wg.Wait()
-	close(resultsChan)
-
-	successes := make([]modelRunResult, 0, len(modelKeys))
-	errorsByModel := make([]string, 0)
-	for result := range resultsChan {
-		if result.Err != nil {
-			errorsByModel = append(errorsByModel, result.Err.Error())
-			continue
-		}
-		successes = append(successes, result)
-	}
-	sort.Slice(successes, func(i, j int) bool {
-		return successes[i].Index < successes[j].Index
-	})
-	if len(successes) == 0 {
-		return nil, model.ChatSessionSummary{}, fmt.Errorf("all model requests failed: %s", strings.Join(errorsByModel, " | "))
-	}
-
-	assistantReplies := make([]model.ModelAssistantResponse, 0, len(successes))
-	for _, item := range successes {
-		assistantReplies = append(assistantReplies, item.Item)
-	}
-
-	primary := assistantReplies[0]
-	assistantContent := primary.Content
-	assistantReasoning := primary.ReasoningContent
-	if len(assistantReplies) > 1 {
-		payloadText, marshalErr := model.BuildPersistedAssistantContent(primary.Model, assistantReplies)
-		if marshalErr != nil {
-			return nil, model.ChatSessionSummary{}, fmt.Errorf("encode multi model payload: %w", marshalErr)
-		}
-		assistantContent = payloadText
-		assistantReasoning = ""
-	}
-	if err := s.store.SaveTurn(ctx, userID, session.ID, trimmed, assistantContent, assistantReasoning); err != nil {
-		return nil, model.ChatSessionSummary{}, err
-	}
-	if err := s.syncSessionTitle(ctx, userID, session, trimmed); err != nil {
-		return nil, model.ChatSessionSummary{}, err
-	}
-	session, err = s.store.GetSession(ctx, userID, session.ID)
+	assistantReplies, err := s.collectModelReplies(ctx, contextMessage, modelKeys, false, nil)
 	if err != nil {
 		return nil, model.ChatSessionSummary{}, err
 	}
-	if s.usageService != nil {
-		for _, item := range assistantReplies {
-			if item.Usage == nil || item.Usage.TotalTokens <= 0 {
-				continue
-			}
-			_ = s.usageService.RecordChatUsage(ctx, userID, item.Usage, item.Model)
-		}
+	session, err = s.persistAssistantResponses(ctx, userID, session, trimmed, assistantReplies)
+	if err != nil {
+		return nil, model.ChatSessionSummary{}, err
 	}
 	return assistantReplies, session, nil
 }
@@ -249,19 +172,17 @@ func (s *ChatService) StreamReply(
 	if err != nil {
 		return model.AssistantReply{}, model.ChatSessionSummary{}, err
 	}
-	if err := s.store.SaveTurn(ctx, userID, session.ID, trimmed, reply.Content, reply.ReasoningContent); err != nil {
-		return model.AssistantReply{}, model.ChatSessionSummary{}, err
-	}
-	if err := s.syncSessionTitle(ctx, userID, session, trimmed); err != nil {
-		return model.AssistantReply{}, model.ChatSessionSummary{}, err
-	}
-	session, err = s.store.GetSession(ctx, userID, session.ID)
+	usage := ensureTokenUsage(reply.Usage, contextMessage, reply)
+	session, err = s.persistAssistantResponses(ctx, userID, session, trimmed, []model.ModelAssistantResponse{
+		{
+			Model:            modelKey,
+			Content:          reply.Content,
+			ReasoningContent: reply.ReasoningContent,
+			Usage:            usage,
+		},
+	})
 	if err != nil {
 		return model.AssistantReply{}, model.ChatSessionSummary{}, err
-	}
-	if s.usageService != nil {
-		usage := ensureTokenUsage(reply.Usage, contextMessage, reply)
-		_ = s.usageService.RecordChatUsage(ctx, userID, usage, modelKey)
 	}
 	return reply, session, nil
 }
@@ -295,11 +216,25 @@ func (s *ChatService) StreamReplyMulti(
 		return nil, model.ChatSessionSummary{}, err
 	}
 
-	type modelRunResult struct {
-		Index int
-		Item  model.ModelAssistantResponse
-		Err   error
+	assistantReplies, err := s.collectModelReplies(ctx, contextMessage, modelKeys, true, onDelta)
+	if err != nil {
+		return nil, model.ChatSessionSummary{}, err
 	}
+	session, err = s.persistAssistantResponses(ctx, userID, session, trimmed, assistantReplies)
+	if err != nil {
+		return nil, model.ChatSessionSummary{}, err
+	}
+	return assistantReplies, session, nil
+}
+
+func (s *ChatService) collectModelReplies(
+	ctx context.Context,
+	contextMessage string,
+	modelKeys []string,
+	useStream bool,
+	onDelta func(modelKey string, delta model.AssistantReplyDelta) error,
+) ([]model.ModelAssistantResponse, error) {
+	// 并发执行模型请求并按前端选择顺序归并结果。
 	resultsChan := make(chan modelRunResult, len(modelKeys))
 	var wg sync.WaitGroup
 
@@ -315,12 +250,21 @@ func (s *ChatService) StreamReplyMulti(
 				}
 				return
 			}
-			reply, runErr := generator.StreamReply(ctx, contextMessage, func(delta model.AssistantReplyDelta) error {
-				if onDelta == nil {
-					return nil
-				}
-				return onDelta(key, delta)
-			})
+
+			var (
+				reply  model.AssistantReply
+				runErr error
+			)
+			if useStream {
+				reply, runErr = generator.StreamReply(ctx, contextMessage, func(delta model.AssistantReplyDelta) error {
+					if onDelta == nil {
+						return nil
+					}
+					return onDelta(key, delta)
+				})
+			} else {
+				reply, runErr = generator.GenerateReply(ctx, contextMessage)
+			}
 			if runErr != nil {
 				resultsChan <- modelRunResult{
 					Index: i,
@@ -328,6 +272,7 @@ func (s *ChatService) StreamReplyMulti(
 				}
 				return
 			}
+
 			resultsChan <- modelRunResult{
 				Index: i,
 				Item: model.ModelAssistantResponse{
@@ -356,12 +301,26 @@ func (s *ChatService) StreamReplyMulti(
 		return successes[i].Index < successes[j].Index
 	})
 	if len(successes) == 0 {
-		return nil, model.ChatSessionSummary{}, fmt.Errorf("all model requests failed: %s", strings.Join(errorsByModel, " | "))
+		return nil, fmt.Errorf("all model requests failed: %s", strings.Join(errorsByModel, " | "))
 	}
 
 	assistantReplies := make([]model.ModelAssistantResponse, 0, len(successes))
 	for _, item := range successes {
 		assistantReplies = append(assistantReplies, item.Item)
+	}
+	return assistantReplies, nil
+}
+
+func (s *ChatService) persistAssistantResponses(
+	ctx context.Context,
+	userID int64,
+	session model.ChatSessionSummary,
+	userMessage string,
+	assistantReplies []model.ModelAssistantResponse,
+) (model.ChatSessionSummary, error) {
+	// 统一处理回复落库、标题同步、会话刷新与 token 统计，保证单/多模型路径一致。
+	if len(assistantReplies) == 0 {
+		return model.ChatSessionSummary{}, fmt.Errorf("empty model response")
 	}
 
 	primary := assistantReplies[0]
@@ -370,30 +329,39 @@ func (s *ChatService) StreamReplyMulti(
 	if len(assistantReplies) > 1 {
 		payloadText, marshalErr := model.BuildPersistedAssistantContent(primary.Model, assistantReplies)
 		if marshalErr != nil {
-			return nil, model.ChatSessionSummary{}, fmt.Errorf("encode multi model payload: %w", marshalErr)
+			return model.ChatSessionSummary{}, fmt.Errorf("encode multi model payload: %w", marshalErr)
 		}
 		assistantContent = payloadText
 		assistantReasoning = ""
 	}
-	if err := s.store.SaveTurn(ctx, userID, session.ID, trimmed, assistantContent, assistantReasoning); err != nil {
-		return nil, model.ChatSessionSummary{}, err
+	if err := s.store.SaveTurn(ctx, userID, session.ID, userMessage, assistantContent, assistantReasoning); err != nil {
+		return model.ChatSessionSummary{}, err
 	}
-	if err := s.syncSessionTitle(ctx, userID, session, trimmed); err != nil {
-		return nil, model.ChatSessionSummary{}, err
+	if err := s.syncSessionTitle(ctx, userID, session, userMessage); err != nil {
+		return model.ChatSessionSummary{}, err
 	}
-	session, err = s.store.GetSession(ctx, userID, session.ID)
+	updatedSession, err := s.store.GetSession(ctx, userID, session.ID)
 	if err != nil {
-		return nil, model.ChatSessionSummary{}, err
+		return model.ChatSessionSummary{}, err
 	}
-	if s.usageService != nil {
-		for _, item := range assistantReplies {
-			if item.Usage == nil || item.Usage.TotalTokens <= 0 {
-				continue
-			}
-			_ = s.usageService.RecordChatUsage(ctx, userID, item.Usage, item.Model)
+	s.recordUsage(ctx, userID, assistantReplies)
+	return updatedSession, nil
+}
+
+func (s *ChatService) recordUsage(
+	ctx context.Context,
+	userID int64,
+	replies []model.ModelAssistantResponse,
+) {
+	if s.usageService == nil {
+		return
+	}
+	for _, item := range replies {
+		if item.Usage == nil || item.Usage.TotalTokens <= 0 {
+			continue
 		}
+		_ = s.usageService.RecordChatUsage(ctx, userID, item.Usage, item.Model)
 	}
-	return assistantReplies, session, nil
 }
 
 func (s *ChatService) normalizeSingleModel(input string) (string, error) {
