@@ -316,6 +316,17 @@ body.hide-header .header{
     box-shadow: 0 18px 40px rgba(0, 0, 0, 0.32);
     padding: 0.68rem;
     z-index: 1400;
+    opacity: 0;
+    transform: translateY(6px) scale(0.98);
+    transform-origin: top left;
+    pointer-events: none;
+    transition: opacity 0.18s ease, transform 0.22s cubic-bezier(0.22, 1, 0.36, 1);
+}
+
+.model-picker__panel.model-picker__panel--visible{
+    opacity: 1;
+    transform: translateY(0) scale(1);
+    pointer-events: auto;
 }
 
 #modelPickerOptions{

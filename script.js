@@ -59,6 +59,7 @@ let usageChartDataCache = {
   totalSummary: null,
 };
 let selectedModelKeys = ["mimo"];
+let modelPickerHideTimer = null;
 
 const MAX_ATTACHMENT_COUNT = 6;
 const MAX_ATTACHMENT_SIZE = 5 * 1024 * 1024;
@@ -1742,6 +1743,7 @@ const bindSidebarEvents = () => {
 
   window.addEventListener("keydown", (event) => {
     if (event.key !== "Escape") return;
+    closeModelPickerPanel();
     closeSidebarDrawer();
   });
 
@@ -1753,12 +1755,45 @@ const bindSidebarEvents = () => {
   });
 };
 
+const openModelPickerPanel = () => {
+  if (!modelPickerPanel) return;
+  if (modelPickerHideTimer) {
+    window.clearTimeout(modelPickerHideTimer);
+    modelPickerHideTimer = null;
+  }
+  modelPickerPanel.classList.remove("hide");
+  requestAnimationFrame(() => {
+    modelPickerPanel.classList.add("model-picker__panel--visible");
+  });
+  modelPicker?.classList.add("is-open");
+  modelPickerTrigger?.setAttribute("aria-expanded", "true");
+};
+
+const closeModelPickerPanel = () => {
+  if (!modelPickerPanel) return;
+  if (modelPickerHideTimer) {
+    window.clearTimeout(modelPickerHideTimer);
+    modelPickerHideTimer = null;
+  }
+  modelPickerPanel.classList.remove("model-picker__panel--visible");
+  modelPicker?.classList.remove("is-open");
+  modelPickerTrigger?.setAttribute("aria-expanded", "false");
+  modelPickerHideTimer = window.setTimeout(() => {
+    if (!modelPickerPanel.classList.contains("model-picker__panel--visible")) {
+      modelPickerPanel.classList.add("hide");
+    }
+    modelPickerHideTimer = null;
+  }, 220);
+};
+
 const bindModelPickerEvents = () => {
   modelPickerTrigger?.addEventListener("click", () => {
-    const isOpening = modelPickerPanel?.classList.contains("hide");
-    modelPickerPanel?.classList.toggle("hide", !isOpening);
-    modelPicker?.classList.toggle("is-open", isOpening);
-    modelPickerTrigger?.setAttribute("aria-expanded", isOpening ? "true" : "false");
+    const isOpen = modelPickerPanel?.classList.contains("model-picker__panel--visible");
+    if (isOpen) {
+      closeModelPickerPanel();
+      return;
+    }
+    openModelPickerPanel();
   });
 
   modelPickerPanel?.addEventListener("click", (event) => {
@@ -2865,9 +2900,7 @@ document.addEventListener("click", (event) => {
     }
   }
   if (modelPickerPanel && modelPicker && !modelPicker.contains(event.target)) {
-    modelPickerPanel.classList.add("hide");
-    modelPicker.classList.remove("is-open");
-    modelPickerTrigger?.setAttribute("aria-expanded", "false");
+    closeModelPickerPanel();
   }
 });
 
