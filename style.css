@@ -1008,8 +1008,8 @@ body:not(.sidebar-collapsed) .sidebar__session{
 }
 
 .sidebar__session.is-active{
-    background: color-mix(in srgb, #4a90e2 20%, var(--secondary-color));
-    color: #ffffff;
+    background: color-mix(in srgb, var(--secondary-hover-color) 70%, transparent);
+    color: var(--text-color);
 }
 
 .sidebar__session-title{
