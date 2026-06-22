@@ -34,6 +34,7 @@ const profileStatus = document.getElementById("profileStatus");
 const profileAvatarPreview = document.getElementById("profileAvatarPreview");
 const avatarInput = document.getElementById("avatarInput");
 const logoutButton = document.getElementById("logoutButton");
+const adminEntryButton = document.getElementById("adminEntryButton");
 const usageSummaryText = document.getElementById("usageSummaryText");
 const usageToggleGroup = document.getElementById("usageToggleGroup");
 const usageChartCanvas = document.getElementById("usageChartCanvas");
@@ -377,9 +378,21 @@ const applyUserProfileToUI = () => {
   if (sidebarUserLabel) {
     sidebarUserLabel.textContent = isLoggedIn ? (currentUser.display_name || "用户") : "登录";
   }
+  if (adminEntryButton) {
+    const isAdmin = Boolean(isLoggedIn && currentUser?.is_admin);
+    adminEntryButton.classList.toggle("hide", !isAdmin);
+  }
   const avatarUrl = isLoggedIn ? normalizeAvatarUrl(currentUser.avatar_url) : "assets/profile.png";
   setImageSourceIfChanged(sidebarUserAvatar, avatarUrl);
   setImageSourceIfChanged(profileAvatarPreview, avatarUrl);
+};
+
+const recordVisit = async () => {
+  try {
+    await authFetch(config.VISIT_URL, { method: "POST" });
+  } catch (error) {
+    console.warn("record visit failed:", error);
+  }
 };
 
 const logout = () => {
@@ -1454,6 +1467,7 @@ const handleAuthSubmit = async (event) => {
   authForm?.reset();
   closeModal(authModal);
   setAuthStatusText("");
+  void recordVisit();
 };
 
 const openProfileModal = async () => {
@@ -1723,6 +1737,10 @@ const bindModalEvents = () => {
   });
   logoutButton?.addEventListener("click", () => {
     logout();
+  });
+  adminEntryButton?.addEventListener("click", () => {
+    if (!currentUser?.is_admin) return;
+    window.location.href = "admin.html";
   });
   sidebarUserCard?.addEventListener("click", () => {
     void openProfileModal();
@@ -3172,6 +3190,7 @@ renderModelPickerOptions();
 bindModelPickerEvents();
 loadSavedChatHistory();
 adjustPromptInputHeight();
+void recordVisit();
 if (authToken) {
   void (async () => {
     try {

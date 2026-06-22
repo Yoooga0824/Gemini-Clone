@@ -10,11 +10,15 @@ import (
 )
 
 type UserService struct {
-	users *repository.UserRepository
+	users      *repository.UserRepository
+	adminEmail string
 }
 
-func NewUserService(users *repository.UserRepository) *UserService {
-	return &UserService{users: users}
+func NewUserService(users *repository.UserRepository, adminEmail string) *UserService {
+	return &UserService{
+		users:      users,
+		adminEmail: strings.ToLower(strings.TrimSpace(adminEmail)),
+	}
 }
 
 func (s *UserService) GetMe(ctx context.Context, userID int64) (model.UserInfo, error) {
@@ -22,7 +26,7 @@ func (s *UserService) GetMe(ctx context.Context, userID int64) (model.UserInfo, 
 	if err != nil {
 		return model.UserInfo{}, err
 	}
-	return toUserInfo(user), nil
+	return toUserInfo(user, s.adminEmail), nil
 }
 
 func (s *UserService) UpdateProfile(ctx context.Context, userID int64, req model.UpdateProfileRequest) (model.UserInfo, error) {

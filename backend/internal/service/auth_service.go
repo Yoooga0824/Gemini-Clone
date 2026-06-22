@@ -15,13 +15,20 @@ type AuthService struct {
 	users          *repository.UserRepository
 	jwtSecret      string
 	jwtExpiryHours int
+	adminEmail     string
 }
 
-func NewAuthService(users *repository.UserRepository, jwtSecret string, jwtExpiryHours int) *AuthService {
+func NewAuthService(
+	users *repository.UserRepository,
+	jwtSecret string,
+	jwtExpiryHours int,
+	adminEmail string,
+) *AuthService {
 	return &AuthService{
 		users:          users,
 		jwtSecret:      jwtSecret,
 		jwtExpiryHours: jwtExpiryHours,
+		adminEmail:     strings.ToLower(strings.TrimSpace(adminEmail)),
 	}
 }
 
@@ -59,7 +66,7 @@ func (s *AuthService) Register(ctx context.Context, req model.AuthRequest) (mode
 	}
 	return model.AuthResponse{
 		Token: token,
-		User:  toUserInfo(user),
+		User:  toUserInfo(user, s.adminEmail),
 	}, nil
 }
 
@@ -85,11 +92,11 @@ func (s *AuthService) Login(ctx context.Context, req model.AuthRequest) (model.A
 	}
 	return model.AuthResponse{
 		Token: token,
-		User:  toUserInfo(user),
+		User:  toUserInfo(user, s.adminEmail),
 	}, nil
 }
 
-func toUserInfo(user model.User) model.UserInfo {
+func toUserInfo(user model.User, adminEmail string) model.UserInfo {
 	avatarURL := ""
 	if strings.TrimSpace(user.AvatarPath) != "" {
 		avatarURL = user.AvatarPath
@@ -99,11 +106,13 @@ func toUserInfo(user model.User) model.UserInfo {
 		displayName = "用户"
 	}
 	return model.UserInfo{
-		ID:          user.ID,
-		Email:       user.Email,
-		DisplayName: displayName,
-		FullName:    user.FullName,
-		Bio:         user.Bio,
-		AvatarURL:   avatarURL,
+		ID:              user.ID,
+		Email:           user.Email,
+		DisplayName:     displayName,
+		FullName:        user.FullName,
+		Bio:             user.Bio,
+		AvatarURL:       avatarURL,
+		DailyTokenLimit: user.DailyTokenLimit,
+		IsAdmin:         strings.EqualFold(strings.TrimSpace(user.Email), strings.TrimSpace(adminEmail)),
 	}
 }

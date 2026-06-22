@@ -62,10 +62,12 @@ func main() {
 	userRepo := repository.NewUserRepository(db)
 	usageRepo := repository.NewUsageRepository(db)
 	chatRepo := repository.NewChatRepository(db)
+	adminRepo := repository.NewAdminRepository(db)
 
-	authService := service.NewAuthService(userRepo, cfg.JWTSecret, cfg.JWTExpiryHours)
-	userService := service.NewUserService(userRepo)
-	usageService := service.NewUsageService(usageRepo)
+	authService := service.NewAuthService(userRepo, cfg.JWTSecret, cfg.JWTExpiryHours, cfg.AdminEmail)
+	userService := service.NewUserService(userRepo, cfg.AdminEmail)
+	usageService := service.NewUsageService(usageRepo, userRepo)
+	adminService := service.NewAdminService(userRepo, adminRepo, cfg.AdminEmail)
 	modelGenerators := make(map[string]service.Generator, len(llmClients))
 	for modelKey, client := range llmClients {
 		modelGenerators[modelKey] = client
@@ -76,13 +78,19 @@ func main() {
 	userHandler := handlers.NewUserHandler(userService, cfg.AvatarUploadDir, cfg.AvatarMaxBytes)
 	usageHandler := handlers.NewUsageHandler(usageService)
 	chatHandler := handlers.NewChatHandler(chatService)
+	adminHandler := handlers.NewAdminHandler(adminService)
+	visitHandler := handlers.NewVisitHandler(adminService, cfg.JWTSecret)
 	router := api.NewRouter(
 		chatHandler,
 		authHandler,
 		userHandler,
 		usageHandler,
+		adminHandler,
+		visitHandler,
+		userRepo,
 		cfg.AllowedOrigin,
 		cfg.JWTSecret,
+		cfg.AdminEmail,
 		filepath.Dir(cfg.AvatarUploadDir),
 	)
 

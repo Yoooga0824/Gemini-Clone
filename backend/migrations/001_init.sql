@@ -6,6 +6,7 @@ CREATE TABLE IF NOT EXISTS users (
   full_name VARCHAR(100) NOT NULL DEFAULT '',
   bio VARCHAR(500) NOT NULL DEFAULT '',
   avatar_path VARCHAR(512) NOT NULL DEFAULT '',
+  daily_token_limit BIGINT UNSIGNED NOT NULL DEFAULT 1000000,
   created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
   updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
 );
@@ -42,4 +43,17 @@ CREATE TABLE IF NOT EXISTS chat_messages (
   INDEX idx_chat_messages_session_created (session_id, created_at),
   CONSTRAINT fk_chat_messages_session FOREIGN KEY (session_id) REFERENCES chat_sessions(id) ON DELETE CASCADE
 );
+
+CREATE TABLE IF NOT EXISTS visit_logs (
+  id BIGINT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
+  visit_date DATE NOT NULL,
+  visitor_key VARCHAR(128) NOT NULL,
+  user_id BIGINT UNSIGNED NULL,
+  created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+  UNIQUE KEY uniq_visit_date_visitor (visit_date, visitor_key),
+  INDEX idx_visit_date (visit_date),
+  INDEX idx_visit_user_id (user_id)
+);
+
+ALTER TABLE users ADD COLUMN daily_token_limit BIGINT UNSIGNED NOT NULL DEFAULT 1000000;
 

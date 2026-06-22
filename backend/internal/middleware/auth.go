@@ -2,10 +2,12 @@ package middleware
 
 import (
 	"context"
+	"database/sql"
 	"net/http"
 	"strings"
 
 	"gemini-clone/backend/internal/auth"
+	"gemini-clone/backend/internal/repository"
 )
 
 type contextKey string
@@ -53,3 +55,37 @@ func UserIDFromContext(ctx context.Context) int64 {
 	return 0
 }
 
+func RequireAdmin(
+	jwtSecret string,
+	adminEmail string,
+	userRepo *repository.UserRepository,
+	next http.HandlerFunc,
+) http.HandlerFunc {
+	return RequireAuth(jwtSecret, func(w http.ResponseWriter, r *http.Request) {
+		userID := UserIDFromContext(r.Context())
+		if userID <= 0 {
+			w.Header().Set("Content-Type", "application/json; charset=utf-8")
+			w.WriteHeader(http.StatusUnauthorized)
+			_, _ = w.Write([]byte(`{"error":{"message":"请先登录"}}`))
+			return
+		}
+		user, err := userRepo.GetByID(r.Context(), userID)
+		if err != nil {
+			status := http.StatusForbidden
+			if err == sql.ErrNoRows {
+				status = http.StatusUnauthorized
+			}
+			w.Header().Set("Content-Type", "application/json; charset=utf-8")
+			w.WriteHeader(status)
+			_, _ = w.Write([]byte(`{"error":{"message":"无后台管理权限"}}`))
+			return
+		}
+		if !strings.EqualFold(strings.TrimSpace(user.Email), strings.TrimSpace(adminEmail)) {
+			w.Header().Set("Content-Type", "application/json; charset=utf-8")
+			w.WriteHeader(http.StatusForbidden)
+			_, _ = w.Write([]byte(`{"error":{"message":"无后台管理权限"}}`))
+			return
+		}
+		next(w, r)
+	})
+}

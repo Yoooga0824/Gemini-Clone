@@ -10,11 +10,12 @@ import (
 type Config struct {
 	ServerPort    string
 	AllowedOrigin string
+	AdminEmail    string
 
-	ModelProviders map[string]ProviderConfig
-	ModelOrder     []string
-	MaxTokens      int
-	Temperature    float64
+	ModelProviders                map[string]ProviderConfig
+	ModelOrder                    []string
+	MaxTokens                     int
+	Temperature                   float64
 	UpstreamRequestTimeoutSeconds int
 
 	MySQLDSN        string
@@ -91,16 +92,17 @@ var providerCatalog = []ProviderBlueprint{
 
 func Load() (Config, error) {
 	cfg := Config{
-		ServerPort:      getEnv("SERVER_PORT", "8080"),
-		AllowedOrigin:   getEnv("ALLOWED_ORIGIN", "http://localhost:3000"),
-		MaxTokens:       getEnvInt("UPSTREAM_MAX_TOKENS", 2048),
-		Temperature:     getEnvFloat("UPSTREAM_TEMPERATURE", 0.7),
+		ServerPort:                    getEnv("SERVER_PORT", "8080"),
+		AllowedOrigin:                 getEnv("ALLOWED_ORIGIN", "http://localhost:3000"),
+		AdminEmail:                    strings.ToLower(strings.TrimSpace(getEnv("ADMIN_EMAIL", "17582495726@163.com"))),
+		MaxTokens:                     getEnvInt("UPSTREAM_MAX_TOKENS", 2048),
+		Temperature:                   getEnvFloat("UPSTREAM_TEMPERATURE", 0.7),
 		UpstreamRequestTimeoutSeconds: getEnvInt("UPSTREAM_REQUEST_TIMEOUT_SECONDS", 120),
-		MySQLDSN:        strings.TrimSpace(getEnv("MYSQL_DSN", "")),
-		JWTSecret:       strings.TrimSpace(getEnv("JWT_SECRET", "")),
-		JWTExpiryHours:  getEnvInt("JWT_EXPIRY_HOURS", 168),
-		AvatarUploadDir: getEnv("AVATAR_UPLOAD_DIR", "./uploads/avatars"),
-		AvatarMaxBytes:  getEnvInt64("AVATAR_MAX_BYTES", 3*1024*1024),
+		MySQLDSN:                      strings.TrimSpace(getEnv("MYSQL_DSN", "")),
+		JWTSecret:                     strings.TrimSpace(getEnv("JWT_SECRET", "")),
+		JWTExpiryHours:                getEnvInt("JWT_EXPIRY_HOURS", 168),
+		AvatarUploadDir:               getEnv("AVATAR_UPLOAD_DIR", "./uploads/avatars"),
+		AvatarMaxBytes:                getEnvInt64("AVATAR_MAX_BYTES", 3*1024*1024),
 		WebSearchProvider: strings.ToLower(strings.TrimSpace(
 			getEnv("WEB_SEARCH_PROVIDER", "tavily"),
 		)),
@@ -118,6 +120,9 @@ func Load() (Config, error) {
 	}
 	if cfg.JWTSecret == "" {
 		return Config{}, fmt.Errorf("JWT_SECRET is required")
+	}
+	if cfg.AdminEmail == "" {
+		return Config{}, fmt.Errorf("ADMIN_EMAIL is required")
 	}
 	if cfg.UpstreamRequestTimeoutSeconds <= 0 {
 		cfg.UpstreamRequestTimeoutSeconds = 120

@@ -119,3 +119,16 @@ func (r *UsageRepository) GetSummary(ctx context.Context, userID int64, days int
 	summary.ByDay = points
 	return summary, nil
 }
+
+func (r *UsageRepository) GetUserTodayTotal(ctx context.Context, userID int64) (int64, error) {
+	query := `
+		SELECT COALESCE(SUM(total_tokens), 0)
+		FROM token_usage
+		WHERE user_id = ? AND DATE(created_at) = CURRENT_DATE()
+	`
+	var total int64
+	if err := r.db.QueryRowContext(ctx, query, userID).Scan(&total); err != nil {
+		return 0, fmt.Errorf("query user today total usage: %w", err)
+	}
+	return total, nil
+}

@@ -8,6 +8,7 @@ import (
 
 	"gemini-clone/backend/internal/api/handlers"
 	"gemini-clone/backend/internal/middleware"
+	"gemini-clone/backend/internal/repository"
 )
 
 func NewRouter(
@@ -15,8 +16,12 @@ func NewRouter(
 	authHandler *handlers.AuthHandler,
 	userHandler *handlers.UserHandler,
 	usageHandler *handlers.UsageHandler,
+	adminHandler *handlers.AdminHandler,
+	visitHandler *handlers.VisitHandler,
+	userRepo *repository.UserRepository,
 	allowedOrigin string,
 	jwtSecret string,
+	adminEmail string,
 	uploadsRoot string,
 ) http.Handler {
 	mux := http.NewServeMux()
@@ -27,12 +32,29 @@ func NewRouter(
 	})
 	mux.HandleFunc("/api/auth/register", authHandler.PostRegister)
 	mux.HandleFunc("/api/auth/login", authHandler.PostLogin)
+	mux.HandleFunc("/api/visit", visitHandler.PostVisit)
 	mux.HandleFunc("/api/me", middleware.RequireAuth(jwtSecret, routeMethods(userHandler.GetMe, userHandler.PatchMe)))
 	mux.HandleFunc("/api/me/avatar", middleware.RequireAuth(jwtSecret, userHandler.PostAvatar))
 	mux.HandleFunc("/api/usage", middleware.RequireAuth(jwtSecret, usageHandler.GetUsageSummary))
 	mux.HandleFunc("/api/chat", middleware.RequireAuth(jwtSecret, chatHandler.PostChat))
 	mux.HandleFunc("/api/chat/sessions", middleware.RequireAuth(jwtSecret, chatHandler.GetSessions))
 	mux.HandleFunc("/api/chat/sessions/", middleware.RequireAuth(jwtSecret, chatHandler.GetSessionDetail))
+	mux.HandleFunc(
+		"/api/admin/users",
+		middleware.RequireAdmin(jwtSecret, adminEmail, userRepo, adminHandler.GetUsers),
+	)
+	mux.HandleFunc(
+		"/api/admin/users/",
+		middleware.RequireAdmin(jwtSecret, adminEmail, userRepo, adminHandler.HandleUserActions),
+	)
+	mux.HandleFunc(
+		"/api/admin/stats/visits",
+		middleware.RequireAdmin(jwtSecret, adminEmail, userRepo, adminHandler.GetVisitStats),
+	)
+	mux.HandleFunc(
+		"/api/admin/stats/tokens",
+		middleware.RequireAdmin(jwtSecret, adminEmail, userRepo, adminHandler.GetTokenOverview),
+	)
 	mux.Handle("/uploads/", http.StripPrefix("/uploads/", http.FileServer(http.Dir(filepath.Clean(uploadsRoot)))))
 
 	return withCORS(mux, allowedOrigin)

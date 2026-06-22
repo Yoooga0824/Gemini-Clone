@@ -1069,7 +1069,7 @@ body.hide-header .chats{
     display: inline-flex;
     align-items: center;
     gap: 8px;
-    min-height: var(--sidebar-action-size);
+    min-height: calc(var(--sidebar-action-size) + 6px);
     padding: 0 10px;
     justify-content: flex-start;
     cursor: pointer;
@@ -1103,7 +1103,7 @@ body:not(.sidebar-collapsed) .sidebar__session{
     overflow: hidden;
     text-overflow: ellipsis;
     white-space: nowrap;
-    font-size: 0.86rem;
+    font-size: 0.985rem;
 }
 
 .sidebar__session-delete{

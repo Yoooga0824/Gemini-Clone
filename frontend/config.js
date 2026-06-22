@@ -8,6 +8,10 @@ const config = {
   AVATAR_UPLOAD_URL: "http://localhost:8080/api/me/avatar",
   USAGE_URL: "http://localhost:8080/api/usage",
   CHAT_SESSIONS_URL: "http://localhost:8080/api/chat/sessions",
+  VISIT_URL: "http://localhost:8080/api/visit",
+  ADMIN_USERS_URL: "http://localhost:8080/api/admin/users",
+  ADMIN_VISIT_STATS_URL: "http://localhost:8080/api/admin/stats/visits",
+  ADMIN_TOKEN_STATS_URL: "http://localhost:8080/api/admin/stats/tokens",
 };
 
 export default config;

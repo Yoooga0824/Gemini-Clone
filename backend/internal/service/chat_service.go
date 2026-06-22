@@ -116,6 +116,11 @@ func (s *ChatService) ReplyMulti(
 	if userID <= 0 {
 		return nil, model.ChatSessionSummary{}, fmt.Errorf("user not authenticated")
 	}
+	if s.usageService != nil {
+		if err := s.usageService.EnsureWithinDailyLimit(ctx, userID); err != nil {
+			return nil, model.ChatSessionSummary{}, err
+		}
+	}
 
 	modelKeys, _, err := s.resolveRequestedModels(requestedModels)
 	if err != nil {
@@ -165,6 +170,11 @@ func (s *ChatService) StreamReply(
 	}
 	if userID <= 0 {
 		return model.AssistantReply{}, model.ChatSessionSummary{}, fmt.Errorf("user not authenticated")
+	}
+	if s.usageService != nil {
+		if err := s.usageService.EnsureWithinDailyLimit(ctx, userID); err != nil {
+			return model.AssistantReply{}, model.ChatSessionSummary{}, err
+		}
 	}
 
 	session, err := s.ensureSession(ctx, userID, sessionID, trimmed)
@@ -219,6 +229,11 @@ func (s *ChatService) StreamReplyMulti(
 	}
 	if userID <= 0 {
 		return nil, model.ChatSessionSummary{}, fmt.Errorf("user not authenticated")
+	}
+	if s.usageService != nil {
+		if err := s.usageService.EnsureWithinDailyLimit(ctx, userID); err != nil {
+			return nil, model.ChatSessionSummary{}, err
+		}
 	}
 
 	modelKeys, unsupportedModels, err := s.resolveRequestedModels(requestedModels)
