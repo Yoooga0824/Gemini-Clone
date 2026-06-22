@@ -5,6 +5,7 @@ import (
 	"log"
 	"net/http"
 	"path/filepath"
+	"time"
 
 	"gemini-clone/backend/internal/api"
 	"gemini-clone/backend/internal/api/handlers"
@@ -42,6 +43,7 @@ func main() {
 			providerCfg.Model,
 			cfg.MaxTokens,
 			cfg.Temperature,
+			time.Duration(cfg.UpstreamRequestTimeoutSeconds)*time.Second,
 			searchClient,
 			cfg.WebSearchMaxResults,
 		)

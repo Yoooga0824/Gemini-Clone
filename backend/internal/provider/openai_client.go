@@ -29,23 +29,28 @@ type OpenAICompatibleClient struct {
 	model            string
 	maxTokens        int
 	temperature      float64
+	upstreamRequestTimeout time.Duration
 	httpClient       *http.Client
 	searchClient     websearch.Client
 	searchMaxResults int
 }
 
-const upstreamRequestTimeout = 45 * time.Second
 const maxToolLoopSteps = 4
 const webSearchToolName = "web_search"
+const maxSameQueryRepeats = 2
 
 // NewOpenAICompatibleClient creates a reusable API client.
 func NewOpenAICompatibleClient(
 	baseURL, path, apiKey, model string,
 	maxTokens int,
 	temperature float64,
+	upstreamRequestTimeout time.Duration,
 	searchClient websearch.Client,
 	searchMaxResults int,
 ) *OpenAICompatibleClient {
+	if upstreamRequestTimeout <= 0 {
+		upstreamRequestTimeout = 120 * time.Second
+	}
 	return &OpenAICompatibleClient{
 		baseURL:     strings.TrimRight(baseURL, "/"),
 		path:        path,
@@ -53,6 +58,7 @@ func NewOpenAICompatibleClient(
 		model:       model,
 		maxTokens:   maxTokens,
 		temperature: temperature,
+		upstreamRequestTimeout: upstreamRequestTimeout,
 		httpClient: &http.Client{
 			// Streaming requests should not be cut off by a fixed client timeout.
 			// We keep a per-request timeout for non-stream calls.
@@ -151,7 +157,7 @@ func (c *OpenAICompatibleClient) GenerateReply(
 	replyOptions model.ReplyOptions,
 ) (model.AssistantReply, error) {
 	if replyOptions.DeepSearch {
-		reply, err := c.generateWithToolLoop(ctx, userMessage)
+		reply, err := c.generateWithToolLoop(ctx, userMessage, nil)
 		if err == nil {
 			return reply, nil
 		}
@@ -200,7 +206,7 @@ func (c *OpenAICompatibleClient) executeChatCompletion(
 	messages []chatMessage,
 	tools []chatTool,
 ) (chatResponse, error) {
-	ctxWithTimeout, cancel := context.WithTimeout(ctx, upstreamRequestTimeout)
+	ctxWithTimeout, cancel := context.WithTimeout(ctx, c.upstreamRequestTimeout)
 	defer cancel()
 
 	payload := chatRequest{
@@ -425,22 +431,50 @@ func (c *OpenAICompatibleClient) streamDeepSearchFallback(
 	userMessage string,
 	onDelta func(model.AssistantReplyDelta) error,
 ) (model.AssistantReply, error) {
-	if onDelta != nil {
+	pushReasoning := func(text string) {
+		if onDelta == nil {
+			return
+		}
+		trimmed := strings.TrimSpace(text)
+		if trimmed == "" {
+			return
+		}
 		_ = onDelta(model.AssistantReplyDelta{
-			ReasoningContent: "已开启深度搜索，正在联网检索可用信息...",
+			ReasoningContent: trimmed + "\n\n",
 		})
 	}
-	reply, err := c.GenerateReply(ctx, userMessage, model.ReplyOptions{DeepSearch: true})
+
+	pushReasoning("已开启深度搜索，正在联网检索可用信息...")
+	reply, err := c.generateWithToolLoop(ctx, userMessage, pushReasoning)
 	if err != nil {
 		return model.AssistantReply{}, err
 	}
-	if onDelta != nil {
-		if strings.TrimSpace(reply.ReasoningContent) != "" {
-			_ = onDelta(model.AssistantReplyDelta{ReasoningContent: "\n\n" + reply.ReasoningContent})
+	emitDeltaSlowly := func(text string, isReasoning bool) {
+		if onDelta == nil {
+			return
 		}
-		if strings.TrimSpace(reply.Content) != "" {
-			_ = onDelta(model.AssistantReplyDelta{Content: reply.Content})
+		chunkSize := 18
+		delay := 20 * time.Millisecond
+		if isReasoning {
+			chunkSize = 24
+			delay = 24 * time.Millisecond
 		}
+		chunks := chunkTextByRune(text, chunkSize)
+		for _, item := range chunks {
+			if isReasoning {
+				_ = onDelta(model.AssistantReplyDelta{ReasoningContent: item})
+			} else {
+				_ = onDelta(model.AssistantReplyDelta{Content: item})
+			}
+			time.Sleep(delay)
+		}
+	}
+
+	if strings.TrimSpace(reply.ReasoningContent) != "" {
+		emitDeltaSlowly(reply.ReasoningContent, true)
+	}
+	if strings.TrimSpace(reply.Content) != "" {
+		emitDeltaSlowly(reply.Content, false)
 	}
 	return reply, nil
 }
@@ -448,6 +482,7 @@ func (c *OpenAICompatibleClient) streamDeepSearchFallback(
 func (c *OpenAICompatibleClient) generateWithToolLoop(
 	ctx context.Context,
 	userMessage string,
+	onProgress func(text string),
 ) (model.AssistantReply, error) {
 	if c.searchClient == nil {
 		return model.AssistantReply{}, fmt.Errorf("web search is not configured")
@@ -458,8 +493,20 @@ func (c *OpenAICompatibleClient) generateWithToolLoop(
 	}
 	reasoningLogs := make([]string, 0, 6)
 	tools := []chatTool{deepSearchToolDef()}
+	searchQueryCounter := map[string]int{}
+	reportProgress := func(text string) {
+		trimmed := strings.TrimSpace(text)
+		if trimmed == "" {
+			return
+		}
+		if onProgress != nil {
+			onProgress(trimmed)
+		}
+		reasoningLogs = append(reasoningLogs, trimmed)
+	}
 
 	for step := 0; step < maxToolLoopSteps; step++ {
+		reportProgress(fmt.Sprintf("第 %d 轮：模型分析中...", step+1))
 		decoded, err := c.executeChatCompletion(ctx, messages, tools)
 		if err != nil {
 			return model.AssistantReply{}, err
@@ -477,12 +524,22 @@ func (c *OpenAICompatibleClient) generateWithToolLoop(
 
 		toolCalls := message.ToolCalls
 		if len(toolCalls) == 0 {
-			if len(reasoningLogs) == 0 {
+			if len(reasoningLogs) == 0 && strings.TrimSpace(reply.ReasoningContent) == "" {
+				return reply, nil
+			}
+			if onProgress != nil {
+				// 流式分支已经实时推送过阶段进度，这里只返回模型最终原始内容，避免重复大段回灌。
 				return reply, nil
 			}
 			combinedReasoning := strings.TrimSpace(strings.Join(append(reasoningLogs, reply.ReasoningContent), "\n\n"))
 			reply.ReasoningContent = combinedReasoning
 			return reply, nil
+		}
+
+		// 到达最大轮次时，强制收敛为“直接回答”，避免继续循环触发 exceeded limit。
+		if step == maxToolLoopSteps-1 {
+			reportProgress("已达到搜索轮次上限，正在基于已检索信息生成最终回答...")
+			return c.forceFinalAnswerWithoutTools(ctx, messages, reasoningLogs, onProgress != nil)
 		}
 
 		assistantMsg := chatMessage{
@@ -492,16 +549,26 @@ func (c *OpenAICompatibleClient) generateWithToolLoop(
 		}
 		if strings.TrimSpace(reply.ReasoningContent) != "" {
 			assistantMsg.ReasoningContent = reply.ReasoningContent
-			reasoningLogs = append(reasoningLogs, reply.ReasoningContent)
+			reportProgress(reply.ReasoningContent)
 		}
 		messages = append(messages, assistantMsg)
 
 		for _, toolCall := range toolCalls {
+			if strings.TrimSpace(toolCall.Function.Arguments) != "" {
+				reportProgress("模型请求调用联网搜索工具，开始检索...")
+			}
+			if query := extractSearchQuery(toolCall); query != "" {
+				searchQueryCounter[query]++
+				if searchQueryCounter[query] > maxSameQueryRepeats {
+					reportProgress("检测到重复检索，正在停止继续搜索并直接汇总回答...")
+					return c.forceFinalAnswerWithoutTools(ctx, messages, reasoningLogs, onProgress != nil)
+				}
+			}
 			resultText, summaryText, err := c.executeWebSearchTool(ctx, toolCall)
 			if err != nil {
 				return model.AssistantReply{}, err
 			}
-			reasoningLogs = append(reasoningLogs, summaryText)
+			reportProgress(summaryText)
 			messages = append(messages, chatMessage{
 				Role:       "tool",
 				ToolCallID: toolCall.ID,
@@ -509,8 +576,71 @@ func (c *OpenAICompatibleClient) generateWithToolLoop(
 			})
 		}
 	}
+	// 理论上不会走到这里，兜底时也尽量返回可用结果。
+	return c.forceFinalAnswerWithoutTools(ctx, messages, reasoningLogs, onProgress != nil)
+}
 
-	return model.AssistantReply{}, fmt.Errorf("tool loop exceeded limit")
+func (c *OpenAICompatibleClient) forceFinalAnswerWithoutTools(
+	ctx context.Context,
+	messages []chatMessage,
+	reasoningLogs []string,
+	isStreaming bool,
+) (model.AssistantReply, error) {
+	finalMessages := append([]chatMessage{}, messages...)
+	finalMessages = append(finalMessages, chatMessage{
+		Role:    "user",
+		Content: "请停止继续调用任何工具。基于已有检索结果，直接输出最终答案，并清晰给出关键依据。",
+	})
+	finalReply, err := c.generateOnce(ctx, finalMessages, nil)
+	if err != nil {
+		return model.AssistantReply{}, err
+	}
+	if isStreaming {
+		return finalReply, nil
+	}
+	if len(reasoningLogs) == 0 {
+		return finalReply, nil
+	}
+	finalReply.ReasoningContent = strings.TrimSpace(
+		strings.Join(append(reasoningLogs, finalReply.ReasoningContent), "\n\n"),
+	)
+	return finalReply, nil
+}
+
+func extractSearchQuery(toolCall chatToolCall) string {
+	if strings.TrimSpace(toolCall.Function.Name) != webSearchToolName {
+		return ""
+	}
+	var args struct {
+		Query string `json:"query"`
+	}
+	if err := json.Unmarshal([]byte(toolCall.Function.Arguments), &args); err != nil {
+		return ""
+	}
+	return strings.ToLower(strings.TrimSpace(args.Query))
+}
+
+func chunkTextByRune(text string, chunkSize int) []string {
+	trimmed := strings.TrimSpace(text)
+	if trimmed == "" {
+		return nil
+	}
+	if chunkSize <= 0 {
+		return []string{trimmed}
+	}
+	runes := []rune(trimmed)
+	if len(runes) <= chunkSize {
+		return []string{trimmed}
+	}
+	chunks := make([]string, 0, (len(runes)/chunkSize)+1)
+	for start := 0; start < len(runes); start += chunkSize {
+		end := start + chunkSize
+		if end > len(runes) {
+			end = len(runes)
+		}
+		chunks = append(chunks, string(runes[start:end]))
+	}
+	return chunks
 }
 
 func (c *OpenAICompatibleClient) executeWebSearchTool(

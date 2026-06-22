@@ -110,6 +110,7 @@
     --sidebar-border: rgba(255, 255, 255, 0.06);
     --sidebar-icon-size: 24px;
     --sidebar-action-size: 40px;
+    --navbar-safe-offset: 5.2rem;
     --deep-search-active-bg: rgba(96, 165, 250, 0.22);
     --deep-search-active-text: #cfe6ff;
     --deep-search-active-border: rgba(96, 165, 250, 0.55);
@@ -267,11 +268,13 @@ body.hide-header .header{
     background: transparent;
     color: var(--text-secondary-color);
     border-radius: 999px;
-    padding: 0.34rem 0.72rem;
+    padding: 0.46rem 0.72rem;
     display: inline-flex;
     align-items: center;
+    justify-content: center;
     gap: 0.35rem;
     font-size: 0.9rem;
+    line-height: 1;
     cursor: pointer;
     transition: background 0.18s ease, color 0.18s ease, border-color 0.18s ease;
 }
@@ -283,6 +286,16 @@ body.hide-header .header{
 
 .deep-search-toggle i{
     font-size: 1rem;
+    line-height: 1;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+}
+
+.deep-search-toggle span{
+    line-height: 1;
+    display: inline-flex;
+    align-items: center;
 }
 
 .deep-search-toggle.is-active{
@@ -819,8 +832,9 @@ body.hide-header .prompt{
 }
 
 .chats{
-    padding: 2rem 1rem 2rem;
-    height: 100vh;
+    padding: 1.2rem 1rem 2rem;
+    margin-top: var(--navbar-safe-offset);
+    height: calc(100vh - var(--navbar-safe-offset));
     margin-left: var(--sidebar-current-width);
     width: calc(100% - var(--sidebar-current-width));
     overflow-y: auto;
@@ -830,7 +844,7 @@ body.hide-header .prompt{
 }
 
 body.hide-header .chats{
-    height: calc(100vh - var(--chat-bottom-safe-space));
+    height: calc(100vh - var(--chat-bottom-safe-space) - var(--navbar-safe-offset));
     padding-bottom: 1.25rem;
 }
 
@@ -2182,6 +2196,10 @@ td{
 }
 
 @media screen and (max-width: 980px) {
+    :root{
+        --navbar-safe-offset: 4.8rem;
+    }
+
     body{
         --sidebar-current-width: 0px !important;
     }
@@ -2207,7 +2225,7 @@ td{
     }
 
     .deep-search-toggle{
-        padding: 0.3rem 0.58rem;
+        padding: 0.4rem 0.58rem;
         font-size: 0.84rem;
     }
 

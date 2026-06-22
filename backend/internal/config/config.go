@@ -15,6 +15,7 @@ type Config struct {
 	ModelOrder     []string
 	MaxTokens      int
 	Temperature    float64
+	UpstreamRequestTimeoutSeconds int
 
 	MySQLDSN        string
 	JWTSecret       string
@@ -94,6 +95,7 @@ func Load() (Config, error) {
 		AllowedOrigin:   getEnv("ALLOWED_ORIGIN", "http://localhost:3000"),
 		MaxTokens:       getEnvInt("UPSTREAM_MAX_TOKENS", 2048),
 		Temperature:     getEnvFloat("UPSTREAM_TEMPERATURE", 0.7),
+		UpstreamRequestTimeoutSeconds: getEnvInt("UPSTREAM_REQUEST_TIMEOUT_SECONDS", 120),
 		MySQLDSN:        strings.TrimSpace(getEnv("MYSQL_DSN", "")),
 		JWTSecret:       strings.TrimSpace(getEnv("JWT_SECRET", "")),
 		JWTExpiryHours:  getEnvInt("JWT_EXPIRY_HOURS", 168),
@@ -116,6 +118,9 @@ func Load() (Config, error) {
 	}
 	if cfg.JWTSecret == "" {
 		return Config{}, fmt.Errorf("JWT_SECRET is required")
+	}
+	if cfg.UpstreamRequestTimeoutSeconds <= 0 {
+		cfg.UpstreamRequestTimeoutSeconds = 120
 	}
 
 	return cfg, nil

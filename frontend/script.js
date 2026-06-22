@@ -108,6 +108,10 @@ const REASONING_SCROLL_FOLLOW_THRESHOLD = 20;
 const SHORT_CODE_BLOCK_MAX_CHARS = 72;
 const MOBILE_BREAKPOINT = 980;
 let shikiHighlighterPromise = null;
+const STREAM_REASONING_CHUNK_SIZE = 1;
+const STREAM_REASONING_CHUNK_DELAY_MS = 10;
+const STREAM_CONTENT_CHUNK_SIZE = 1;
+const STREAM_CONTENT_CHUNK_DELAY_MS = 8;
 
 const SHIKI_LANGUAGES = [
   "javascript",
@@ -140,6 +144,23 @@ const formatBytes = (bytes = 0) => {
   if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KB`;
   return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
 };
+
+const splitTextByRuneChunks = (text = "", chunkSize = 16) => {
+  const source = String(text || "");
+  if (!source) return [];
+  if (chunkSize <= 0) return [source];
+  const runes = Array.from(source);
+  const chunks = [];
+  for (let index = 0; index < runes.length; index += chunkSize) {
+    chunks.push(runes.slice(index, index + chunkSize).join(""));
+  }
+  return chunks;
+};
+
+const sleep = (ms) =>
+  new Promise((resolve) => {
+    window.setTimeout(resolve, ms);
+  });
 
 const escapeHtml = (text = "") =>
   text
@@ -2091,6 +2112,24 @@ const consumeAssistantEventStream = async (
     syncContentTypewriter();
   };
 
+  const appendReasoningDeltaSmoothly = async (deltaText = "") => {
+    const chunks = splitTextByRuneChunks(
+      deltaText,
+      STREAM_REASONING_CHUNK_SIZE
+    );
+    if (chunks.length === 0) return;
+    for (const chunk of chunks) {
+      hasReasoningSignal = true;
+      visibleReasoning += chunk;
+      if (!streamStarted) {
+        incomingMessageElement.classList.remove("message--loading");
+        streamStarted = true;
+      }
+      applyRender();
+      await sleep(STREAM_REASONING_CHUNK_DELAY_MS);
+    }
+  };
+
   const splitIncompleteTagSuffix = (segment, tag) => {
     const lowered = segment.toLowerCase();
     const loweredTag = tag.toLowerCase();
@@ -2205,8 +2244,7 @@ const consumeAssistantEventStream = async (
           if (
             hasExplicitReasoningDelta
           ) {
-            hasReasoningSignal = true;
-            visibleReasoning += eventData.reasoning_content;
+            await appendReasoningDeltaSmoothly(eventData.reasoning_content);
           }
 
           if (typeof eventData.content === "string" && eventData.content) {
@@ -2327,6 +2365,44 @@ const consumeAssistantEventStreamMulti = async (
     scrollChatsToBottom("auto");
   };
 
+  const appendTrackReasoningSmoothly = async (state, deltaText = "") => {
+    const chunks = splitTextByRuneChunks(
+      deltaText,
+      STREAM_REASONING_CHUNK_SIZE
+    );
+    if (chunks.length === 0) return;
+    for (const chunk of chunks) {
+      state.reasoning_content += chunk;
+      if (!streamStarted) {
+        incomingMessageElement.classList.remove("message--loading");
+        streamStarted = true;
+      }
+      if (state.model === activeModel) {
+        renderActiveTrack();
+      }
+      await sleep(STREAM_REASONING_CHUNK_DELAY_MS);
+    }
+  };
+
+  const appendTrackContentSmoothly = async (state, deltaText = "") => {
+    const chunks = splitTextByRuneChunks(
+      deltaText,
+      STREAM_CONTENT_CHUNK_SIZE
+    );
+    if (chunks.length === 0) return;
+    for (const chunk of chunks) {
+      state.content += chunk;
+      if (!streamStarted) {
+        incomingMessageElement.classList.remove("message--loading");
+        streamStarted = true;
+      }
+      if (state.model === activeModel) {
+        renderActiveTrack();
+      }
+      await sleep(STREAM_CONTENT_CHUNK_DELAY_MS);
+    }
+  };
+
   if (tabsElement) {
     tabsElement.addEventListener("click", (event) => {
       const tab = event.target.closest("[data-model-tab]");
@@ -2389,10 +2465,10 @@ const consumeAssistantEventStreamMulti = async (
           continue;
         }
         if (typeof eventData.content === "string" && eventData.content) {
-          state.content += eventData.content;
+          await appendTrackContentSmoothly(state, eventData.content);
         }
         if (typeof eventData.reasoning_content === "string" && eventData.reasoning_content) {
-          state.reasoning_content += eventData.reasoning_content;
+          await appendTrackReasoningSmoothly(state, eventData.reasoning_content);
         }
         if (!streamStarted) {
           incomingMessageElement.classList.remove("message--loading");
