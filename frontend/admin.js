@@ -13,8 +13,12 @@ const userDetail = document.getElementById("userDetail");
 const visitCards = document.getElementById("visitCards");
 const visitTrendTable = document.getElementById("visitTrendTable");
 const tokenCards = document.getElementById("tokenCards");
+const tokenFocusTitle = document.getElementById("tokenFocusTitle");
+const tokenFocusValueHeader = document.getElementById("tokenFocusValueHeader");
+const tokenFocusTable = document.getElementById("tokenFocusTable");
 const tokenDailyTable = document.getElementById("tokenDailyTable");
 const tokenUsersTable = document.getElementById("tokenUsersTable");
+const tokenUserDetail = document.getElementById("tokenUserDetail");
 const backToChatBtn = document.getElementById("backToChatBtn");
 const adminLogoutBtn = document.getElementById("adminLogoutBtn");
 
@@ -23,6 +27,154 @@ let currentUser = null;
 let usersCache = [];
 let activeUserID = 0;
 let currentTab = "users";
+let tokenOverviewCache = null;
+let tokenSplitMode = "today";
+let activeTokenUserID = 0;
+let visitStatsCache = null;
+let tokenUserDetailCache = null;
+
+let visitTrendChartInstance = null;
+let tokenFocusChartInstance = null;
+let tokenDailyChartInstance = null;
+let tokenUserChartInstance = null;
+
+const AXIS_COLOR = "#9aa7c0";
+
+const formatDateLabel = (value) => {
+  if (!value) return "";
+  const normalized = String(value).trim();
+  const [datePart] = normalized.split("T");
+  return datePart || normalized;
+};
+
+const buildYAxisRange = (series = []) => {
+  const values = series.filter((value) => Number.isFinite(value)).map((value) => Number(value));
+  if (values.length === 0) return { min: 0, max: 1 };
+  const minValue = Math.min(...values);
+  const maxValue = Math.max(...values);
+  if (minValue === maxValue) {
+    if (maxValue === 0) return { min: 0, max: 1 };
+    const padding = Math.max(Math.abs(maxValue) * 0.3, 1);
+    return { min: 0, max: maxValue + padding };
+  }
+  const range = maxValue - minValue;
+  const padding = Math.max(range * 0.15, 1);
+  return { min: Math.max(0, minValue - padding), max: maxValue + padding };
+};
+
+const destroyChart = (instanceRef) => {
+  if (instanceRef) instanceRef.destroy();
+};
+
+const renderLineChart = (canvasId, labels, data, options = {}) => {
+  if (typeof Chart === "undefined") return null;
+  const canvas = document.getElementById(canvasId);
+  if (!canvas) return null;
+  const {
+    instance,
+    borderColor = "#60a5fa",
+    pointColor = "#c4b5fd",
+    fillColor = "rgba(96, 165, 250, 0.20)",
+    label = "",
+  } = options;
+  if (instance) destroyChart(instance);
+  const yAxisRange = buildYAxisRange(data);
+  return new Chart(canvas.getContext("2d"), {
+    type: "line",
+    data: {
+      labels,
+      datasets: [
+        {
+          label,
+          data,
+          fill: true,
+          borderColor,
+          backgroundColor: fillColor,
+          tension: 0.3,
+          pointRadius: 2.2,
+          pointBackgroundColor: pointColor,
+          borderWidth: 2,
+        },
+      ],
+    },
+    options: {
+      responsive: true,
+      maintainAspectRatio: false,
+      plugins: { legend: { display: false } },
+      scales: {
+        x: {
+          ticks: { color: AXIS_COLOR, maxTicksLimit: 9, font: { size: 11 } },
+          grid: { display: false },
+        },
+        y: {
+          min: yAxisRange.min,
+          max: yAxisRange.max,
+          ticks: { color: AXIS_COLOR, maxTicksLimit: 5, font: { size: 11 } },
+          grid: { color: "rgba(255,255,255,0.06)" },
+          border: { display: false },
+        },
+      },
+    },
+  });
+};
+
+const renderBarChart = (canvasId, labels, data, options = {}) => {
+  if (typeof Chart === "undefined") return null;
+  const canvas = document.getElementById(canvasId);
+  if (!canvas) return null;
+  const {
+    instance,
+    backgroundColor = "rgba(96, 165, 250, 0.72)",
+    label = "",
+  } = options;
+  if (instance) destroyChart(instance);
+  const yAxisRange = buildYAxisRange(data);
+  return new Chart(canvas.getContext("2d"), {
+    type: "bar",
+    data: {
+      labels,
+      datasets: [
+        {
+          label,
+          data,
+          backgroundColor,
+          borderRadius: 6,
+          maxBarThickness: 42,
+        },
+      ],
+    },
+    options: {
+      responsive: true,
+      maintainAspectRatio: false,
+      plugins: { legend: { display: false } },
+      scales: {
+        x: {
+          ticks: { color: AXIS_COLOR, maxTicksLimit: 8, font: { size: 11 } },
+          grid: { display: false },
+        },
+        y: {
+          min: yAxisRange.min,
+          max: yAxisRange.max,
+          ticks: { color: AXIS_COLOR, maxTicksLimit: 5, font: { size: 11 } },
+          grid: { color: "rgba(255,255,255,0.06)" },
+          border: { display: false },
+        },
+      },
+    },
+  });
+};
+
+const scheduleChartsForTab = (tab) => {
+  window.requestAnimationFrame(() => {
+    if (tab === "visits") {
+      renderVisitChart();
+    } else if (tab === "tokens") {
+      renderTokenFocusChart();
+      renderTokenDailyChart();
+      renderTokenUserChart();
+    }
+  });
+};
 
 const formatNumber = (value = 0) => Number(value || 0).toLocaleString("zh-CN");
 
@@ -95,6 +247,7 @@ const setTab = (tab) => {
   document.querySelectorAll(".admin-tab").forEach((panel) => {
     panel.classList.toggle("is-active", panel.dataset.tabContent === tab);
   });
+  scheduleChartsForTab(tab);
 };
 
 const renderUsers = () => {
@@ -124,11 +277,12 @@ const renderUserChats = (sessions = []) => {
   if (!Array.isArray(sessions) || sessions.length === 0) {
     return `<div class="detail-placeholder">暂无对话记录</div>`;
   }
-  return sessions
+  const sessionHtml = sessions
+    .slice(0, 30)
     .map(
-      (session) => `
+      (session, index) => `
       <div class="chat-session">
-        <div class="chat-session__title">${session.title || "新聊天"} · ${session.updated_at || "-"}</div>
+        <div class="chat-session__title">#${index + 1} ${session.title || "新聊天"} · ${session.updated_at || "-"}</div>
         ${(session.messages || [])
           .map(
             (message) => `
@@ -143,6 +297,7 @@ const renderUserChats = (sessions = []) => {
     `
     )
     .join("");
+  return `<div class="chat-records-scroll">${sessionHtml}</div>`;
 };
 
 const fetchUserDetail = async (userID) => {
@@ -259,24 +414,200 @@ const renderVisitCards = (stats = {}) => {
   `;
 };
 
+const renderVisitChart = () => {
+  const trend = Array.isArray(visitStatsCache?.daily_trend) ? visitStatsCache.daily_trend : [];
+  visitTrendChartInstance = renderLineChart(
+    "visitTrendChart",
+    trend.map((item) => formatDateLabel(item.date)),
+    trend.map((item) => Number(item.count || 0)),
+    {
+      instance: visitTrendChartInstance,
+      borderColor: "#34d399",
+      pointColor: "#6ee7b7",
+      fillColor: "rgba(52, 211, 153, 0.18)",
+      label: "访问人数",
+    }
+  );
+};
+
 const loadVisitStats = async () => {
   const response = await authFetch(config.ADMIN_VISIT_STATS_URL, { method: "GET" });
   if (!response.ok) {
     throw new Error(await parseErrorMessage(response, "加载访问统计失败"));
   }
-  const stats = await response.json();
-  renderVisitCards(stats);
-  const trend = Array.isArray(stats?.daily_trend) ? stats.daily_trend : [];
+  visitStatsCache = await response.json();
+  renderVisitCards(visitStatsCache);
+  const trend = Array.isArray(visitStatsCache?.daily_trend) ? visitStatsCache.daily_trend : [];
   visitTrendTable.innerHTML = trend
     .map((item) => `<tr><td>${item.date || "-"}</td><td>${formatNumber(item.count || 0)}</td></tr>`)
     .join("");
+  if (currentTab === "visits") {
+    scheduleChartsForTab("visits");
+  }
+};
+
+const getTokenUsersSortedByMode = (mode = "today") => {
+  const users = Array.isArray(tokenOverviewCache?.users) ? [...tokenOverviewCache.users] : [];
+  if (mode === "history") {
+    users.sort((a, b) => Number(b.total_tokens || 0) - Number(a.total_tokens || 0));
+  } else {
+    users.sort((a, b) => Number(b.today_tokens || 0) - Number(a.today_tokens || 0));
+  }
+  return users;
 };
 
 const renderTokenCards = (overview = {}) => {
   tokenCards.innerHTML = `
-    <div class="stat-card"><div class="stat-card__label">今日总Token</div><div class="stat-card__value">${formatNumber(overview.today_total_tokens)}</div></div>
-    <div class="stat-card"><div class="stat-card__label">历史总Token</div><div class="stat-card__value">${formatNumber(overview.history_total_tokens)}</div></div>
+    <button type="button" class="stat-card is-clickable ${tokenSplitMode === "today" ? "is-active" : ""}" data-token-mode="today">
+      <div class="stat-card__head">
+        <span class="stat-card__icon"><i class='bx bx-sun'></i></span>
+        <div class="stat-card__label">今日总Token（点我看今日明细）</div>
+      </div>
+      <div class="stat-card__value">${formatNumber(overview.today_total_tokens)}</div>
+    </button>
+    <button type="button" class="stat-card is-clickable ${tokenSplitMode === "history" ? "is-active" : ""}" data-token-mode="history">
+      <div class="stat-card__head">
+        <span class="stat-card__icon"><i class='bx bx-history'></i></span>
+        <div class="stat-card__label">历史总Token（点我看历史明细）</div>
+      </div>
+      <div class="stat-card__value">${formatNumber(overview.history_total_tokens)}</div>
+    </button>
   `;
+};
+
+const renderTokenFocusChart = () => {
+  const mode = tokenSplitMode === "history" ? "history" : "today";
+  const users = getTokenUsersSortedByMode(mode).slice(0, 12);
+  const labels = users.map((item) => item.display_name || item.email || "用户");
+  const data = users.map((item) =>
+    Number(mode === "history" ? item.total_tokens : item.today_tokens) || 0
+  );
+  tokenFocusChartInstance = renderBarChart(
+    "tokenFocusChart",
+    labels,
+    data,
+    {
+      instance: tokenFocusChartInstance,
+      backgroundColor:
+        mode === "history" ? "rgba(139, 92, 246, 0.78)" : "rgba(96, 165, 250, 0.78)",
+      label: mode === "history" ? "历史Token" : "今日Token",
+    }
+  );
+};
+
+const renderTokenDailyChart = () => {
+  const points = Array.isArray(tokenOverviewCache?.daily_total) ? tokenOverviewCache.daily_total : [];
+  tokenDailyChartInstance = renderLineChart(
+    "tokenDailyChart",
+    points.map((item) => formatDateLabel(item.date)),
+    points.map((item) => Number(item.total_tokens || 0)),
+    {
+      instance: tokenDailyChartInstance,
+      borderColor: "#8b5cf6",
+      pointColor: "#ec4899",
+      fillColor: "rgba(139, 92, 246, 0.18)",
+      label: "每日Token",
+    }
+  );
+};
+
+const renderTokenUserChart = () => {
+  const points = Array.isArray(tokenUserDetailCache?.token_by_day)
+    ? tokenUserDetailCache.token_by_day.slice(-30)
+    : [];
+  tokenUserChartInstance = renderLineChart(
+    "tokenUserChart",
+    points.map((item) => formatDateLabel(item.date)),
+    points.map((item) => Number(item.total_tokens || 0)),
+    {
+      instance: tokenUserChartInstance,
+      borderColor: "#f59e0b",
+      pointColor: "#fbbf24",
+      fillColor: "rgba(245, 158, 11, 0.18)",
+      label: "用户每日Token",
+    }
+  );
+};
+
+const renderTokenFocus = () => {
+  const mode = tokenSplitMode === "history" ? "history" : "today";
+  const users = getTokenUsersSortedByMode(mode);
+  if (tokenFocusTitle) {
+    tokenFocusTitle.textContent = mode === "history" ? "历史Token分布（按用户）" : "今日Token分布（按用户）";
+  }
+  if (tokenFocusValueHeader) {
+    tokenFocusValueHeader.textContent = mode === "history" ? "历史总量" : "今日总量";
+  }
+  if (tokenFocusTable) {
+    tokenFocusTable.innerHTML = users
+      .map((item) => {
+        const value = mode === "history" ? item.total_tokens : item.today_tokens;
+        return `<tr><td>${item.display_name || "用户"}<br/><span style="color:#9aa7c0;font-size:12px;">${item.email || ""}</span></td><td>${formatNumber(value || 0)}</td></tr>`;
+      })
+      .join("");
+  }
+  if (currentTab === "tokens") {
+    renderTokenFocusChart();
+  }
+};
+
+const renderTokenUsersTable = () => {
+  const users = Array.isArray(tokenOverviewCache?.users) ? tokenOverviewCache.users : [];
+  tokenUsersTable.innerHTML = users
+    .map((item) => {
+      const isActive = Number(item.user_id) === Number(activeTokenUserID);
+      return `
+        <tr class="clickable-row ${isActive ? "is-active" : ""}" data-token-user-id="${item.user_id}">
+          <td>${item.display_name || "用户"}<br/><span style="color:#9aa7c0;font-size:12px;">${item.email || ""}</span></td>
+          <td>${formatNumber(item.today_tokens || 0)}</td>
+          <td>${formatNumber(item.total_tokens || 0)}</td>
+        </tr>
+      `;
+    })
+    .join("");
+};
+
+const renderTokenUserDetail = (detail) => {
+  if (!tokenUserDetail) return;
+  tokenUserDetailCache = detail;
+  const user = detail?.user || {};
+  const points = Array.isArray(detail?.token_by_day) ? detail.token_by_day.slice(-30) : [];
+  tokenUserDetail.innerHTML = `
+    <div class="detail-grid" style="margin-top:8px;">
+      <div><strong>用户：</strong>${user.display_name || "用户"}（${user.email || "-"}）</div>
+      <div><strong>每日上限：</strong>${formatNumber(user.daily_token_limit || 0)}</div>
+      <div><strong>今日总量：</strong>${formatNumber(detail?.token_summary?.today_tokens || 0)}</div>
+      <div><strong>历史总量：</strong>${formatNumber(detail?.token_summary?.total_tokens || 0)}</div>
+    </div>
+    <div class="table-wrap">
+      <table>
+        <thead>
+          <tr>
+            <th>日期</th>
+            <th>Total</th>
+          </tr>
+        </thead>
+        <tbody>
+          ${points.map((item) => `<tr><td>${item.date || "-"}</td><td>${formatNumber(item.total_tokens || 0)}</td></tr>`).join("")}
+        </tbody>
+      </table>
+    </div>
+  `;
+  if (currentTab === "tokens") {
+    scheduleChartsForTab("tokens");
+  }
+};
+
+const loadTokenUserDetail = async (userID) => {
+  if (!userID) return;
+  setStatus("加载用户Token详情中...");
+  const response = await authFetch(`${config.ADMIN_USERS_URL}/${userID}`, { method: "GET" });
+  if (!response.ok) {
+    throw new Error(await parseErrorMessage(response, "加载用户Token详情失败"));
+  }
+  const detail = await response.json();
+  renderTokenUserDetail(detail);
+  setStatus("");
 };
 
 const loadTokenStats = async () => {
@@ -284,20 +615,28 @@ const loadTokenStats = async () => {
   if (!response.ok) {
     throw new Error(await parseErrorMessage(response, "加载Token统计失败"));
   }
-  const overview = await response.json();
-  renderTokenCards(overview);
-  tokenDailyTable.innerHTML = (overview?.daily_total || [])
+  tokenOverviewCache = await response.json();
+  renderTokenCards(tokenOverviewCache);
+  renderTokenFocus();
+  tokenDailyTable.innerHTML = (tokenOverviewCache?.daily_total || [])
     .map(
       (item) =>
         `<tr><td>${item.date || "-"}</td><td>${formatNumber(item.prompt_tokens || 0)}</td><td>${formatNumber(item.completion_tokens || 0)}</td><td>${formatNumber(item.total_tokens || 0)}</td></tr>`
     )
     .join("");
-  tokenUsersTable.innerHTML = (overview?.users || [])
-    .map(
-      (item) =>
-        `<tr><td>${item.display_name || "用户"}<br/><span style="color:#9aa7c0;font-size:12px;">${item.email || ""}</span></td><td>${formatNumber(item.today_tokens || 0)}</td><td>${formatNumber(item.total_tokens || 0)}</td></tr>`
-    )
-    .join("");
+  if (!activeTokenUserID) {
+    activeTokenUserID = Number(tokenOverviewCache?.users?.[0]?.user_id || 0);
+  }
+  renderTokenUsersTable();
+  if (activeTokenUserID) {
+    await loadTokenUserDetail(activeTokenUserID);
+  } else if (tokenUserDetail) {
+    tokenUserDetail.innerHTML = "暂无可展示的用户Token详情";
+    tokenUserDetailCache = null;
+  }
+  if (currentTab === "tokens") {
+    scheduleChartsForTab("tokens");
+  }
 };
 
 const refreshCurrentTab = async () => {
@@ -334,6 +673,28 @@ const bindEvents = () => {
     activeUserID = userID;
     renderUsers();
     void fetchUserDetail(activeUserID);
+  });
+
+  tokenCards?.addEventListener("click", (event) => {
+    const card = event.target.closest("[data-token-mode]");
+    if (!card) return;
+    const nextMode = card.dataset.tokenMode;
+    if (nextMode !== "today" && nextMode !== "history") return;
+    if (tokenSplitMode === nextMode) return;
+    tokenSplitMode = nextMode;
+    renderTokenCards(tokenOverviewCache || {});
+    renderTokenFocus();
+    renderTokenFocusChart();
+  });
+
+  tokenUsersTable?.addEventListener("click", (event) => {
+    const row = event.target.closest("[data-token-user-id]");
+    if (!row) return;
+    const userID = Number(row.dataset.tokenUserId);
+    if (!userID) return;
+    activeTokenUserID = userID;
+    renderTokenUsersTable();
+    void loadTokenUserDetail(userID);
   });
 
   refreshBtn?.addEventListener("click", () => {

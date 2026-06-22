@@ -176,6 +176,7 @@ func (r *AdminRepository) ListUserSessions(ctx context.Context, userID int64) ([
 		FROM chat_sessions
 		WHERE user_id = ?
 		ORDER BY updated_at DESC, id DESC
+		LIMIT 30
 	`
 	rows, err := r.db.QueryContext(ctx, query, userID)
 	if err != nil {

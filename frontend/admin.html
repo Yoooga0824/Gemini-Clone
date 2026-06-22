@@ -47,7 +47,7 @@
           <div class="panel-grid panel-grid--users">
             <article class="panel">
               <h3>注册用户列表</h3>
-              <p class="panel-tip">点击用户条可查看详情、修改每日Token上限、重置密码、查看对话记录。</p>
+              <p class="panel-tip">点击用户条可查看详情、修改每日Token上限、重置密码、查看对话记录（最近30次会话）。</p>
               <div id="usersList" class="list"></div>
             </article>
             <article class="panel">
@@ -61,6 +61,9 @@
           <div class="stats-row" id="visitCards"></div>
           <article class="panel">
             <h3>最近30天访问趋势</h3>
+            <div class="chart-frame">
+              <canvas id="visitTrendChart"></canvas>
+            </div>
             <div class="table-wrap">
               <table>
                 <thead>
@@ -79,7 +82,49 @@
           <div class="stats-row" id="tokenCards"></div>
           <div class="panel-grid">
             <article class="panel">
+              <h3 id="tokenFocusTitle">全站Token分布</h3>
+              <div class="chart-frame chart-frame--compact">
+                <canvas id="tokenFocusChart"></canvas>
+              </div>
+              <div class="table-wrap">
+                <table>
+                  <thead>
+                    <tr>
+                      <th>用户</th>
+                      <th id="tokenFocusValueHeader">今日总量</th>
+                    </tr>
+                  </thead>
+                  <tbody id="tokenFocusTable"></tbody>
+                </table>
+              </div>
+            </article>
+            <article class="panel">
+              <h3>每个用户Token使用（点击查看详情）</h3>
+              <div class="table-wrap">
+                <table>
+                  <thead>
+                    <tr>
+                      <th>用户</th>
+                      <th>今日总量</th>
+                      <th>历史总量</th>
+                    </tr>
+                  </thead>
+                  <tbody id="tokenUsersTable"></tbody>
+                </table>
+              </div>
+              <div class="detail-block">
+                <strong>用户Token详情</strong>
+                <div class="chart-frame chart-frame--compact">
+                  <canvas id="tokenUserChart"></canvas>
+                </div>
+                <div id="tokenUserDetail" class="detail-placeholder">点击上方用户查看明细</div>
+              </div>
+            </article>
+            <article class="panel">
               <h3>全站每日Token总量（最近30天）</h3>
+              <div class="chart-frame">
+                <canvas id="tokenDailyChart"></canvas>
+              </div>
               <div class="table-wrap">
                 <table>
                   <thead>
@@ -94,27 +139,13 @@
                 </table>
               </div>
             </article>
-            <article class="panel">
-              <h3>每个用户Token使用</h3>
-              <div class="table-wrap">
-                <table>
-                  <thead>
-                    <tr>
-                      <th>用户</th>
-                      <th>今日总量</th>
-                      <th>历史总量</th>
-                    </tr>
-                  </thead>
-                  <tbody id="tokenUsersTable"></tbody>
-                </table>
-              </div>
-            </article>
           </div>
         </section>
         <div class="page-status" id="adminStatus"></div>
       </main>
     </div>
 
+    <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.3/dist/chart.umd.min.js"></script>
     <script type="module" src="admin.js"></script>
   </body>
 </html>
