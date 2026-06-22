@@ -150,9 +150,11 @@ type chatStreamChunk struct {
 }
 
 var thinkTagPattern = regexp.MustCompile(`(?s)<think>\s*(.*?)\s*</think>`)
-var dateQuestionPattern = regexp.MustCompile(`(?i)(今天|当前|现在|日期|几号|几月几日|星期几|周几|time|date|today|now)`)
 var explicitDateTimeQuestionPattern = regexp.MustCompile(
 	`(?i)(今天(是)?几号|今天(是)?几月几日|今天(是)?星期几|今天(是)?周几|今天日期|现在几点|当前时间|当前日期|what('?| i)?s the date|what time is it|today'?s date|current date|current time)`,
+)
+var strictDateTimeQuestionPattern = regexp.MustCompile(
+	`(?i)^(请问|麻烦问下|想问下|告诉我)?\s*(今天|现在|当前|today|now|current)?\s*(日期|时间|几号|几月几日|星期几|周几|几点|date|time)\s*(是多少|是啥|是什么|吗|\?)?$`,
 )
 var dateSensitiveQueryPattern = regexp.MustCompile(`(?i)(今天|明天|昨天|本周|本月|本季度|今年|去年|近期|最近|最新|当前|目前|截至|as of|today|now|current|latest|recent)`)
 
@@ -802,9 +804,6 @@ func shouldAnswerWithLocalDate(userMessage string) bool {
 	if trimmed == "" {
 		return false
 	}
-	if !dateQuestionPattern.MatchString(trimmed) {
-		return false
-	}
 
 	normalized := strings.ToLower(strings.Join(strings.Fields(trimmed), " "))
 
@@ -813,28 +812,12 @@ func shouldAnswerWithLocalDate(userMessage string) bool {
 		return true
 	}
 
-	// 只在“短问句 + 无业务主题词”时走本地时间直返，避免误伤“今日新闻”等请求。
-	topicKeywords := []string{
-		"新闻", "资讯", "热搜", "天气", "股价", "汇率", "比赛", "赛程", "比分", "发生", "总结", "分析",
-		"news", "headline", "weather", "stock", "price", "exchange rate", "match", "result", "event", "analysis",
+	// 更严格的兜底：仅匹配“短问句 + 纯日期时间意图”。
+	if len([]rune(normalized)) > 24 {
+		return false
 	}
-	for _, keyword := range topicKeywords {
-		if strings.Contains(normalized, keyword) {
-			return false
-		}
-	}
-
-	compact := strings.ReplaceAll(normalized, " ", "")
-	shortDateQueries := []string{
-		"今天日期", "今天几号", "今天星期几", "今天周几", "现在时间", "当前时间", "当前日期",
-		"todaydate", "whattimeisit", "currentdate", "currenttime",
-	}
-	for _, q := range shortDateQueries {
-		if compact == q {
-			return true
-		}
-	}
-	return false
+	sanitized := strings.NewReplacer("，", "", "。", "", "？", "", "?", "", "！", "", "!", "", "：", "", ":", "").Replace(normalized)
+	return strictDateTimeQuestionPattern.MatchString(strings.TrimSpace(sanitized))
 }
 
 func buildLocalDateAnswer() string {
