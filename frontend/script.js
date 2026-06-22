@@ -2009,6 +2009,12 @@ const consumeAssistantEventStream = async (
   let resolvedSession = null;
   let contentTypewriterTimer = null;
   const CONTENT_TYPEWRITER_DELAY_MS = 16;
+  const syncThinkingAvatar = () => {
+    incomingMessageElement.classList.toggle(
+      "message--thinking",
+      hasReasoningSignal && !streamCompleted
+    );
+  };
 
   const stripReasoningOverlap = (contentText, reasoningText) => {
     const content = contentText || "";
@@ -2121,6 +2127,7 @@ const consumeAssistantEventStream = async (
     for (const chunk of chunks) {
       hasReasoningSignal = true;
       visibleReasoning += chunk;
+      syncThinkingAvatar();
       if (!streamStarted) {
         incomingMessageElement.classList.remove("message--loading");
         streamStarted = true;
@@ -2233,6 +2240,7 @@ const consumeAssistantEventStream = async (
           visibleContent = finalParsed.content || "";
           visibleReasoning = ENABLE_REASONING_OUTPUT ? finalParsed.reasoning || "" : "";
           if ((visibleReasoning || "").trim()) hasReasoningSignal = true;
+          syncThinkingAvatar();
           thinkMode = false;
           pendingTagPrefix = "";
         } else {
@@ -2253,6 +2261,7 @@ const consumeAssistantEventStream = async (
             const chunkIncludesThinkTag =
               loweredChunk.includes("<think") || loweredChunk.includes("</think");
             if (chunkIncludesThinkTag) hasReasoningSignal = true;
+            syncThinkingAvatar();
             const overlappedWithReasoning = shouldTreatDeltaContentAsReasoning(
               contentChunk,
               typeof eventData.reasoning_content === "string"
@@ -2277,6 +2286,7 @@ const consumeAssistantEventStream = async (
   }
 
   incomingMessageElement.classList.remove("message--loading");
+  incomingMessageElement.classList.remove("message--thinking");
   if (contentTypewriterTimer) {
     clearInterval(contentTypewriterTimer);
     contentTypewriterTimer = null;
@@ -2318,7 +2328,15 @@ const consumeAssistantEventStreamMulti = async (
   let activeModel = modelOrder[0] || "mimo";
   let tabsRenderKey = "";
   let streamStarted = false;
+  let streamCompleted = false;
+  let hasReasoningSignal = false;
   let resolvedSession = null;
+  const syncThinkingAvatar = () => {
+    incomingMessageElement.classList.toggle(
+      "message--thinking",
+      hasReasoningSignal && !streamCompleted
+    );
+  };
 
   const ensureTrackState = (modelKey) => {
     const key = String(modelKey || "").trim().toLowerCase();
@@ -2468,6 +2486,8 @@ const consumeAssistantEventStreamMulti = async (
           await appendTrackContentSmoothly(state, eventData.content);
         }
         if (typeof eventData.reasoning_content === "string" && eventData.reasoning_content) {
+          hasReasoningSignal = true;
+          syncThinkingAvatar();
           await appendTrackReasoningSmoothly(state, eventData.reasoning_content);
         }
         if (!streamStarted) {
@@ -2525,6 +2545,7 @@ const consumeAssistantEventStreamMulti = async (
       }
 
       if (eventData.type === "done") {
+        streamCompleted = true;
         resolvedSession = eventData?.session || null;
         const activeBeforeDone = activeModel;
         const finalResponses = normalizeModelResponses(
@@ -2558,6 +2579,7 @@ const consumeAssistantEventStreamMulti = async (
           }
         }
         incomingMessageElement.classList.remove("message--loading");
+        incomingMessageElement.classList.remove("message--thinking");
         renderTrackTabs();
         renderActiveTrack();
       }
@@ -2568,6 +2590,7 @@ const consumeAssistantEventStreamMulti = async (
 
   await enhanceMessageBody(messageElement);
   actionsElement?.classList.remove("hide");
+  incomingMessageElement.classList.remove("message--thinking");
   isGeneratingResponse = false;
   scrollChatsToBottom("auto");
 
@@ -2596,6 +2619,7 @@ const requestApiResponse = async (incomingMessageElement, requestedModels = []) 
   if (!authToken) {
     isGeneratingResponse = false;
     incomingMessageElement.classList.remove("message--loading");
+    incomingMessageElement.classList.remove("message--thinking");
     messageTextElement.innerText = "请先登录后再发送消息。";
     messageTextElement.closest(".message").classList.add("message--error");
     openModal(authModal);
@@ -2719,6 +2743,7 @@ const requestApiResponse = async (incomingMessageElement, requestedModels = []) 
       .filter((item) => item.model && (item.content || item.reasoning_content));
     if (modelResponses.length === 0) throw new Error("Invalid API response.");
     incomingMessageElement.classList.remove("message--loading");
+    incomingMessageElement.classList.remove("message--thinking");
     if (modelResponses.length > 1) {
       const picked = pickModelResponse(
         modelResponses,
@@ -2759,6 +2784,7 @@ const requestApiResponse = async (incomingMessageElement, requestedModels = []) 
   } catch (error) {
     isGeneratingResponse = false;
     incomingMessageElement.classList.remove("message--loading");
+    incomingMessageElement.classList.remove("message--thinking");
     messageTextElement.innerText = error.message;
     messageTextElement.closest(".message").classList.add("message--error");
   }
@@ -2852,7 +2878,7 @@ const displayLoadingAnimation = (requestModels = [], options = {}) => {
   const thinkingStatusElement = loadingMessageElement.querySelector(".message__thinking-status");
   if (thinkingStatusElement) {
     const labels = normalizeModelSelection(requestModels).map((key) => getModelLabel(key));
-    const deepSearchSuffix = deepSearch ? "（已开启深度搜索）" : "";
+    const deepSearchSuffix = deepSearch ? "（已开启联网搜索）" : "";
     thinkingStatusElement.textContent = `正在向 ${labels.join(" / ")} 请求回答...${deepSearchSuffix}`;
   }
   const requestModelKeys = normalizeModelSelection(requestModels);

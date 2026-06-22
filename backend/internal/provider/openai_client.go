@@ -38,6 +38,7 @@ type OpenAICompatibleClient struct {
 const maxToolLoopSteps = 4
 const webSearchToolName = "web_search"
 const maxSameQueryRepeats = 2
+const deepSearchHeartbeatInterval = 5 * time.Second
 
 // NewOpenAICompatibleClient creates a reusable API client.
 func NewOpenAICompatibleClient(
@@ -467,7 +468,7 @@ func (c *OpenAICompatibleClient) streamDeepSearchFallback(
 		})
 	}
 
-	pushReasoning("已开启深度搜索，正在联网检索可用信息...")
+	pushReasoning("已开启联网搜索，正在联网检索可用信息...")
 	reply, err := c.generateWithToolLoop(ctx, userMessage, pushReasoning)
 	if err != nil {
 		return model.AssistantReply{}, err
@@ -530,7 +531,7 @@ func (c *OpenAICompatibleClient) generateWithToolLoop(
 
 	for step := 0; step < maxToolLoopSteps; step++ {
 		reportProgress(fmt.Sprintf("第 %d 轮：模型分析中...", step+1))
-		decoded, err := c.executeChatCompletion(ctx, messages, tools)
+		decoded, err := c.executeChatCompletionWithHeartbeat(ctx, messages, tools, step+1, reportProgress)
 		if err != nil {
 			return model.AssistantReply{}, err
 		}
@@ -587,7 +588,7 @@ func (c *OpenAICompatibleClient) generateWithToolLoop(
 					return c.forceFinalAnswerWithoutTools(ctx, messages, reasoningLogs, onProgress != nil)
 				}
 			}
-			resultText, summaryText, err := c.executeWebSearchTool(ctx, toolCall)
+			resultText, summaryText, err := c.executeWebSearchToolWithHeartbeat(ctx, toolCall, reportProgress)
 			if err != nil {
 				return model.AssistantReply{}, err
 			}
@@ -601,6 +602,77 @@ func (c *OpenAICompatibleClient) generateWithToolLoop(
 	}
 	// 理论上不会走到这里，兜底时也尽量返回可用结果。
 	return c.forceFinalAnswerWithoutTools(ctx, messages, reasoningLogs, onProgress != nil)
+}
+
+func (c *OpenAICompatibleClient) executeChatCompletionWithHeartbeat(
+	ctx context.Context,
+	messages []chatMessage,
+	tools []chatTool,
+	step int,
+	reportProgress func(text string),
+) (chatResponse, error) {
+	if reportProgress == nil {
+		return c.executeChatCompletion(ctx, messages, tools)
+	}
+	type completionResult struct {
+		resp chatResponse
+		err  error
+	}
+	resultCh := make(chan completionResult, 1)
+	startedAt := time.Now()
+	go func() {
+		resp, err := c.executeChatCompletion(ctx, messages, tools)
+		resultCh <- completionResult{resp: resp, err: err}
+	}()
+
+	ticker := time.NewTicker(deepSearchHeartbeatInterval)
+	defer ticker.Stop()
+	for {
+		select {
+		case result := <-resultCh:
+			return result.resp, result.err
+		case <-ticker.C:
+			waitedSeconds := int(time.Since(startedAt).Seconds())
+			reportProgress(fmt.Sprintf("第 %d 轮：模型分析中（已等待 %d 秒）...", step, waitedSeconds))
+		case <-ctx.Done():
+			return chatResponse{}, ctx.Err()
+		}
+	}
+}
+
+func (c *OpenAICompatibleClient) executeWebSearchToolWithHeartbeat(
+	ctx context.Context,
+	toolCall chatToolCall,
+	reportProgress func(text string),
+) (string, string, error) {
+	if reportProgress == nil {
+		return c.executeWebSearchTool(ctx, toolCall)
+	}
+	type searchResult struct {
+		raw     string
+		summary string
+		err     error
+	}
+	resultCh := make(chan searchResult, 1)
+	startedAt := time.Now()
+	go func() {
+		raw, summary, err := c.executeWebSearchTool(ctx, toolCall)
+		resultCh <- searchResult{raw: raw, summary: summary, err: err}
+	}()
+
+	ticker := time.NewTicker(deepSearchHeartbeatInterval)
+	defer ticker.Stop()
+	for {
+		select {
+		case result := <-resultCh:
+			return result.raw, result.summary, result.err
+		case <-ticker.C:
+			waitedSeconds := int(time.Since(startedAt).Seconds())
+			reportProgress(fmt.Sprintf("联网检索进行中（已等待 %d 秒）...", waitedSeconds))
+		case <-ctx.Done():
+			return "", "", ctx.Err()
+		}
+	}
 }
 
 func (c *OpenAICompatibleClient) forceFinalAnswerWithoutTools(

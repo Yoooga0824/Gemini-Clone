@@ -1953,6 +1953,10 @@ body.sidebar-collapsed .sidebar__brand:hover .sidebar__expand-btn{
     animation: rotate 3s linear infinite;
 }
 
+.chats .message--thinking .message__avatar{
+    animation: rotate 3s linear infinite;
+}
+
 @keyframes rotate {
     
     100%{
