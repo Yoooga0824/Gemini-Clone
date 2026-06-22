@@ -149,6 +149,11 @@ type chatStreamChunk struct {
 }
 
 var thinkTagPattern = regexp.MustCompile(`(?s)<think>\s*(.*?)\s*</think>`)
+var dateQuestionPattern = regexp.MustCompile(`(?i)(今天|当前|现在|日期|几号|几月几日|星期几|周几|time|date|today|now)`)
+var explicitDateTimeQuestionPattern = regexp.MustCompile(
+	`(?i)(今天(是)?几号|今天(是)?几月几日|今天(是)?星期几|今天(是)?周几|今天日期|现在几点|当前时间|当前日期|what('?| i)?s the date|what time is it|today'?s date|current date|current time)`,
+)
+var dateSensitiveQueryPattern = regexp.MustCompile(`(?i)(今天|明天|昨天|本周|本月|本季度|今年|去年|近期|最近|最新|当前|目前|截至|as of|today|now|current|latest|recent)`)
 
 // GenerateReply sends user message to upstream LLM and returns separated answer/reasoning text.
 func (c *OpenAICompatibleClient) GenerateReply(
@@ -156,6 +161,12 @@ func (c *OpenAICompatibleClient) GenerateReply(
 	userMessage string,
 	replyOptions model.ReplyOptions,
 ) (model.AssistantReply, error) {
+	if shouldAnswerWithLocalDate(userMessage) {
+		return model.AssistantReply{
+			Content: buildLocalDateAnswer(),
+		}, nil
+	}
+
 	if replyOptions.DeepSearch {
 		reply, err := c.generateWithToolLoop(ctx, userMessage, nil)
 		if err == nil {
@@ -269,6 +280,18 @@ func (c *OpenAICompatibleClient) StreamReply(
 	replyOptions model.ReplyOptions,
 	onDelta func(model.AssistantReplyDelta) error,
 ) (model.AssistantReply, error) {
+	if shouldAnswerWithLocalDate(userMessage) {
+		answer := buildLocalDateAnswer()
+		if onDelta != nil {
+			if err := onDelta(model.AssistantReplyDelta{Content: answer}); err != nil {
+				return model.AssistantReply{}, err
+			}
+		}
+		return model.AssistantReply{
+			Content: answer,
+		}, nil
+	}
+
 	if replyOptions.DeepSearch {
 		return c.streamDeepSearchFallback(ctx, userMessage, onDelta)
 	}
@@ -489,7 +512,7 @@ func (c *OpenAICompatibleClient) generateWithToolLoop(
 	}
 
 	messages := []chatMessage{
-		{Role: "user", Content: userMessage},
+		{Role: "user", Content: attachLocalDateContextIfNeeded(userMessage)},
 	}
 	reasoningLogs := make([]string, 0, 6)
 	tools := []chatTool{deepSearchToolDef()}
@@ -661,13 +684,17 @@ func (c *OpenAICompatibleClient) executeWebSearchTool(
 	if query == "" {
 		return "", "", fmt.Errorf("web_search query is empty")
 	}
+	queryForSearch := query
+	if dateSensitiveQueryPattern.MatchString(query) {
+		queryForSearch = enrichDateSensitiveSearchQuery(query)
+	}
 
-	results, err := c.searchClient.Search(ctx, query, c.searchMaxResults)
+	results, err := c.searchClient.Search(ctx, queryForSearch, c.searchMaxResults)
 	if err != nil {
 		return "", "", fmt.Errorf("web search failed: %w", err)
 	}
 	if len(results) == 0 {
-		return `{"results":[]}`, fmt.Sprintf("联网搜索关键词：%s\n检索结果为空。", query), nil
+		return `{"results":[]}`, fmt.Sprintf("联网搜索关键词：%s\n检索结果为空。", queryForSearch), nil
 	}
 	for idx := range results {
 		if len([]rune(results[idx].Content)) > 800 {
@@ -676,7 +703,7 @@ func (c *OpenAICompatibleClient) executeWebSearchTool(
 	}
 
 	payload := map[string]any{
-		"query":   query,
+		"query":   queryForSearch,
 		"results": results,
 	}
 	data, err := json.Marshal(payload)
@@ -686,7 +713,7 @@ func (c *OpenAICompatibleClient) executeWebSearchTool(
 
 	var summary strings.Builder
 	summary.WriteString("联网搜索关键词：")
-	summary.WriteString(query)
+	summary.WriteString(queryForSearch)
 	summary.WriteString("\n已检索到以下来源：")
 	for idx, item := range results {
 		if idx >= 5 {
@@ -695,6 +722,129 @@ func (c *OpenAICompatibleClient) executeWebSearchTool(
 		summary.WriteString(fmt.Sprintf("\n%d. %s (%s)", idx+1, item.Title, item.URL))
 	}
 	return string(data), summary.String(), nil
+}
+
+func shouldAnswerWithLocalDate(userMessage string) bool {
+	currentQuestion := extractCurrentQuestion(userMessage)
+	trimmed := strings.TrimSpace(currentQuestion)
+	if trimmed == "" {
+		return false
+	}
+	if !dateQuestionPattern.MatchString(trimmed) {
+		return false
+	}
+
+	normalized := strings.ToLower(strings.Join(strings.Fields(trimmed), " "))
+
+	// 明确问日期/时间本身，直接返回本地时间。
+	if explicitDateTimeQuestionPattern.MatchString(normalized) {
+		return true
+	}
+
+	// 只在“短问句 + 无业务主题词”时走本地时间直返，避免误伤“今日新闻”等请求。
+	topicKeywords := []string{
+		"新闻", "资讯", "热搜", "天气", "股价", "汇率", "比赛", "赛程", "比分", "发生", "总结", "分析",
+		"news", "headline", "weather", "stock", "price", "exchange rate", "match", "result", "event", "analysis",
+	}
+	for _, keyword := range topicKeywords {
+		if strings.Contains(normalized, keyword) {
+			return false
+		}
+	}
+
+	compact := strings.ReplaceAll(normalized, " ", "")
+	shortDateQueries := []string{
+		"今天日期", "今天几号", "今天星期几", "今天周几", "现在时间", "当前时间", "当前日期",
+		"todaydate", "whattimeisit", "currentdate", "currenttime",
+	}
+	for _, q := range shortDateQueries {
+		if compact == q {
+			return true
+		}
+	}
+	return false
+}
+
+func buildLocalDateAnswer() string {
+	now := time.Now()
+	zoneName, zoneOffset := now.Zone()
+	weekdayMap := map[time.Weekday]string{
+		time.Sunday:    "星期日",
+		time.Monday:    "星期一",
+		time.Tuesday:   "星期二",
+		time.Wednesday: "星期三",
+		time.Thursday:  "星期四",
+		time.Friday:    "星期五",
+		time.Saturday:  "星期六",
+	}
+	weekday := weekdayMap[now.Weekday()]
+	if weekday == "" {
+		weekday = now.Weekday().String()
+	}
+	offsetHours := zoneOffset / 3600
+	offsetMinutes := (zoneOffset % 3600) / 60
+	return fmt.Sprintf(
+		"当前本地日期时间：%s（%s，UTC%+03d:%02d）。今天是%s。",
+		now.Format("2006-01-02 15:04:05"),
+		zoneName,
+		offsetHours,
+		absInt(offsetMinutes),
+		weekday,
+	)
+}
+
+func attachLocalDateContextIfNeeded(userMessage string) string {
+	currentQuestion := extractCurrentQuestion(userMessage)
+	if !dateSensitiveQueryPattern.MatchString(currentQuestion) {
+		return userMessage
+	}
+	now := time.Now()
+	zoneName, zoneOffset := now.Zone()
+	return fmt.Sprintf(
+		"%s\n\n[系统提供的本地日期参考]\n当前本地日期时间：%s（%s，UTC%+03d:%02d）。若问题涉及“今天/最近/最新/本周”等相对时间，请严格以此为准。",
+		userMessage,
+		now.Format("2006-01-02 15:04:05"),
+		zoneName,
+		zoneOffset/3600,
+		absInt((zoneOffset%3600)/60),
+	)
+}
+
+func extractCurrentQuestion(input string) string {
+	trimmed := strings.TrimSpace(input)
+	if trimmed == "" {
+		return ""
+	}
+	const currentQuestionMarker = "[当前问题]"
+	markerIndex := strings.LastIndex(trimmed, currentQuestionMarker)
+	if markerIndex == -1 {
+		return trimmed
+	}
+	afterMarker := strings.TrimSpace(trimmed[markerIndex+len(currentQuestionMarker):])
+	if afterMarker == "" {
+		return trimmed
+	}
+	return afterMarker
+}
+
+func enrichDateSensitiveSearchQuery(query string) string {
+	now := time.Now()
+	zoneName, zoneOffset := now.Zone()
+	return fmt.Sprintf(
+		"%s（当前本地日期时间：%s，时区：%s，UTC%+03d:%02d）",
+		query,
+		now.Format("2006-01-02 15:04:05"),
+		zoneName,
+		zoneOffset/3600,
+		absInt((zoneOffset%3600)/60),
+	)
+}
+
+func absInt(value int) int {
+	if value < 0 {
+		return -value
+	}
+	return value
 }
 
 func deepSearchToolDef() chatTool {
