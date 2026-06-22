@@ -45,7 +45,14 @@ func (h *ChatHandler) PostChat(w http.ResponseWriter, r *http.Request) {
 	}
 
 	userID := middleware.UserIDFromContext(r.Context())
-	replies, session, err := h.chatService.ReplyMulti(r.Context(), userID, req.SessionID, req.Message, req.Models)
+	replies, session, err := h.chatService.ReplyMulti(
+		r.Context(),
+		userID,
+		req.SessionID,
+		req.Message,
+		req.Models,
+		model.ReplyOptions{DeepSearch: req.DeepSearch},
+	)
 	if err != nil {
 		writeJSON(w, http.StatusBadRequest, model.ErrorEnvelope{
 			Error: model.ErrorBody{Message: err.Error()},
@@ -110,6 +117,7 @@ func (h *ChatHandler) postChatStream(w http.ResponseWriter, r *http.Request, req
 		req.SessionID,
 		req.Message,
 		req.Models,
+		model.ReplyOptions{DeepSearch: req.DeepSearch},
 		func(modelKey string, delta model.AssistantReplyDelta) error {
 			return sendEvent(map[string]string{
 				"type":              "delta",

@@ -13,10 +13,15 @@ import (
 )
 
 type Generator interface {
-	GenerateReply(ctx context.Context, userMessage string) (model.AssistantReply, error)
+	GenerateReply(
+		ctx context.Context,
+		userMessage string,
+		replyOptions model.ReplyOptions,
+	) (model.AssistantReply, error)
 	StreamReply(
 		ctx context.Context,
 		userMessage string,
+		replyOptions model.ReplyOptions,
 		onDelta func(model.AssistantReplyDelta) error,
 	) (model.AssistantReply, error)
 }
@@ -80,8 +85,9 @@ func (s *ChatService) Reply(
 	userID int64,
 	sessionID int64,
 	userMessage string,
+	replyOptions model.ReplyOptions,
 ) (model.AssistantReply, model.ChatSessionSummary, error) {
-	replies, session, err := s.ReplyMulti(ctx, userID, sessionID, userMessage, nil)
+	replies, session, err := s.ReplyMulti(ctx, userID, sessionID, userMessage, nil, replyOptions)
 	if err != nil {
 		return model.AssistantReply{}, model.ChatSessionSummary{}, err
 	}
@@ -101,6 +107,7 @@ func (s *ChatService) ReplyMulti(
 	sessionID int64,
 	userMessage string,
 	requestedModels []string,
+	replyOptions model.ReplyOptions,
 ) ([]model.ModelAssistantResponse, model.ChatSessionSummary, error) {
 	trimmed := strings.TrimSpace(userMessage)
 	if trimmed == "" {
@@ -124,7 +131,15 @@ func (s *ChatService) ReplyMulti(
 		return nil, model.ChatSessionSummary{}, err
 	}
 
-	assistantReplies, err := s.collectModelReplies(ctx, contextMessage, modelKeys, false, nil, nil)
+	assistantReplies, err := s.collectModelReplies(
+		ctx,
+		contextMessage,
+		modelKeys,
+		replyOptions,
+		false,
+		nil,
+		nil,
+	)
 	if err != nil {
 		return nil, model.ChatSessionSummary{}, err
 	}
@@ -141,6 +156,7 @@ func (s *ChatService) StreamReply(
 	sessionID int64,
 	userMessage string,
 	streamModel string,
+	replyOptions model.ReplyOptions,
 	onDelta func(model.AssistantReplyDelta) error,
 ) (model.AssistantReply, model.ChatSessionSummary, error) {
 	trimmed := strings.TrimSpace(userMessage)
@@ -168,7 +184,7 @@ func (s *ChatService) StreamReply(
 	if !ok {
 		return model.AssistantReply{}, model.ChatSessionSummary{}, fmt.Errorf("model %s is unavailable", modelKey)
 	}
-	reply, err := generator.StreamReply(ctx, contextMessage, onDelta)
+	reply, err := generator.StreamReply(ctx, contextMessage, replyOptions, onDelta)
 	if err != nil {
 		return model.AssistantReply{}, model.ChatSessionSummary{}, err
 	}
@@ -193,6 +209,7 @@ func (s *ChatService) StreamReplyMulti(
 	sessionID int64,
 	userMessage string,
 	requestedModels []string,
+	replyOptions model.ReplyOptions,
 	onDelta func(modelKey string, delta model.AssistantReplyDelta) error,
 	onModelError func(modelKey string, err error) error,
 ) ([]model.ModelAssistantResponse, model.ChatSessionSummary, error) {
@@ -226,6 +243,7 @@ func (s *ChatService) StreamReplyMulti(
 		ctx,
 		contextMessage,
 		modelKeys,
+		replyOptions,
 		true,
 		onDelta,
 		onModelError,
@@ -244,6 +262,7 @@ func (s *ChatService) collectModelReplies(
 	ctx context.Context,
 	contextMessage string,
 	modelKeys []string,
+	replyOptions model.ReplyOptions,
 	useStream bool,
 	onDelta func(modelKey string, delta model.AssistantReplyDelta) error,
 	onModelError func(modelKey string, err error) error,
@@ -270,14 +289,19 @@ func (s *ChatService) collectModelReplies(
 				runErr error
 			)
 			if useStream {
-				reply, runErr = generator.StreamReply(ctx, contextMessage, func(delta model.AssistantReplyDelta) error {
-					if onDelta == nil {
-						return nil
-					}
-					return onDelta(key, delta)
-				})
+				reply, runErr = generator.StreamReply(
+					ctx,
+					contextMessage,
+					replyOptions,
+					func(delta model.AssistantReplyDelta) error {
+						if onDelta == nil {
+							return nil
+						}
+						return onDelta(key, delta)
+					},
+				)
 			} else {
-				reply, runErr = generator.GenerateReply(ctx, contextMessage)
+				reply, runErr = generator.GenerateReply(ctx, contextMessage, replyOptions)
 			}
 			if runErr != nil {
 				if onModelError != nil {

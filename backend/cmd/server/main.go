@@ -13,6 +13,7 @@ import (
 	"gemini-clone/backend/internal/provider"
 	"gemini-clone/backend/internal/repository"
 	"gemini-clone/backend/internal/service"
+	"gemini-clone/backend/internal/websearch"
 
 	"github.com/joho/godotenv"
 )
@@ -27,6 +28,11 @@ func main() {
 		log.Fatalf("load config failed: %v", err)
 	}
 
+	var searchClient websearch.Client
+	if cfg.WebSearchProvider == "tavily" && cfg.TavilyAPIKey != "" {
+		searchClient = websearch.NewTavilyClient(cfg.TavilyBaseURL, cfg.TavilyAPIKey)
+	}
+
 	llmClients := make(map[string]*provider.OpenAICompatibleClient, len(cfg.ModelProviders))
 	for modelKey, providerCfg := range cfg.ModelProviders {
 		llmClients[modelKey] = provider.NewOpenAICompatibleClient(
@@ -36,6 +42,8 @@ func main() {
 			providerCfg.Model,
 			cfg.MaxTokens,
 			cfg.Temperature,
+			searchClient,
+			cfg.WebSearchMaxResults,
 		)
 	}
 

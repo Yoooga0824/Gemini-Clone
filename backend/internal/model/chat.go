@@ -3,9 +3,10 @@ package model
 // ChatRequest is what frontend sends to backend.
 // Keep it minimal and easy for beginners.
 type ChatRequest struct {
-	Message   string   `json:"message"`
-	SessionID int64    `json:"session_id,omitempty"`
-	Models    []string `json:"models,omitempty"`
+	Message    string   `json:"message"`
+	SessionID  int64    `json:"session_id,omitempty"`
+	Models     []string `json:"models,omitempty"`
+	DeepSearch bool     `json:"deep_search,omitempty"`
 }
 
 // ErrorEnvelope provides a consistent error shape to frontend.
@@ -50,6 +51,11 @@ type AssistantReply struct {
 	Content          string
 	ReasoningContent string
 	Usage            *TokenUsage
+}
+
+// ReplyOptions carries optional generation switches.
+type ReplyOptions struct {
+	DeepSearch bool
 }
 
 // AssistantReplyDelta is one streamed incremental chunk from upstream.

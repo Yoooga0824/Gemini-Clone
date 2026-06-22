@@ -42,6 +42,7 @@ const modelPickerTrigger = document.getElementById("modelPickerTrigger");
 const modelPickerPanel = document.getElementById("modelPickerPanel");
 const modelPickerSummary = document.getElementById("modelPickerSummary");
 const modelPickerOptions = document.getElementById("modelPickerOptions");
+const deepSearchToggle = document.getElementById("deepSearchToggle");
 
 // State variables
 let currentUserMessage = null;
@@ -60,6 +61,7 @@ let usageChartDataCache = {
 };
 let selectedModelKeys = ["mimo"];
 let modelPickerHideTimer = null;
+let deepSearchEnabled = false;
 
 const MAX_ATTACHMENT_COUNT = 6;
 const MAX_ATTACHMENT_SIZE = 5 * 1024 * 1024;
@@ -87,6 +89,7 @@ const API_REQUEST_URL = config.BACKEND_API_URL;
 const CHAT_SESSIONS_URL = config.CHAT_SESSIONS_URL;
 const AUTH_TOKEN_STORAGE_KEY = "authToken";
 const MODEL_SELECTION_STORAGE_KEY = "selectedModels";
+const DEEP_SEARCH_STORAGE_KEY = "deepSearchEnabled";
 const USER_PROFILE_STORAGE_KEY = "cachedUserProfile";
 const MAX_CLOUD_SESSIONS = 30;
 const promptInput = messageForm.querySelector(".prompt__form-input");
@@ -202,6 +205,22 @@ const setSelectedModels = (nextModels = []) => {
   renderModelPickerSummary();
   syncModelPickerOptionStates();
   saveModelSelection();
+};
+
+const saveDeepSearchState = () => {
+  localStorage.setItem(DEEP_SEARCH_STORAGE_KEY, deepSearchEnabled ? "true" : "false");
+};
+
+const renderDeepSearchToggle = () => {
+  if (!deepSearchToggle) return;
+  deepSearchToggle.classList.toggle("is-active", deepSearchEnabled);
+  deepSearchToggle.setAttribute("aria-pressed", deepSearchEnabled ? "true" : "false");
+};
+
+const setDeepSearchEnabled = (enabled) => {
+  deepSearchEnabled = !!enabled;
+  renderDeepSearchToggle();
+  saveDeepSearchState();
 };
 
 const renderModelPickerOptions = () => {
@@ -1835,6 +1854,10 @@ const bindModelPickerEvents = () => {
     }
     setSelectedModels(next);
   });
+
+  deepSearchToggle?.addEventListener("click", () => {
+    setDeepSearchEnabled(!deepSearchEnabled);
+  });
 };
 
 // Load saved data from local storage
@@ -1871,6 +1894,7 @@ const loadSavedChatHistory = () => {
   } catch {
     setSelectedModels(["mimo"]);
   }
+  setDeepSearchEnabled(localStorage.getItem(DEEP_SEARCH_STORAGE_KEY) === "true");
   currentUser = authToken ? getCachedUserProfile() : null;
   applyUserProfileToUI();
   renderActiveSessionMessages();
@@ -2512,6 +2536,7 @@ const requestApiResponse = async (incomingMessageElement, requestedModels = []) 
       body: JSON.stringify({
         message: currentUserMessage,
         models: normalizedRequestedModels,
+        deep_search: deepSearchEnabled,
         ...(sessionId ? { session_id: sessionId } : {}),
       }),
     });
@@ -2707,7 +2732,8 @@ const addCopyButtonToCodeBlocks = (scopeElement = document) => {
 };
 
 // Show loading animation during API request
-const displayLoadingAnimation = (requestModels = []) => {
+const displayLoadingAnimation = (requestModels = [], options = {}) => {
+  const { deepSearch = false } = options;
   const loadingHtml = `
 
         <div class="message__content">
@@ -2750,7 +2776,8 @@ const displayLoadingAnimation = (requestModels = []) => {
   const thinkingStatusElement = loadingMessageElement.querySelector(".message__thinking-status");
   if (thinkingStatusElement) {
     const labels = normalizeModelSelection(requestModels).map((key) => getModelLabel(key));
-    thinkingStatusElement.textContent = `正在向 ${labels.join(" / ")} 请求回答...`;
+    const deepSearchSuffix = deepSearch ? "（已开启深度搜索）" : "";
+    thinkingStatusElement.textContent = `正在向 ${labels.join(" / ")} 请求回答...${deepSearchSuffix}`;
   }
   const requestModelKeys = normalizeModelSelection(requestModels);
   if (requestModelKeys.length > 1) {
@@ -2825,7 +2852,7 @@ const handleOutgoingMessage = async () => {
   themeRoot.style.setProperty("--prompt-expand-shift", "0px");
   document.body.classList.add("hide-header");
   updateChatBottomSafeSpace();
-  displayLoadingAnimation(selectedModelKeys);
+  displayLoadingAnimation(selectedModelKeys, { deepSearch: deepSearchEnabled });
 };
 
 const handleFeedbackAction = (buttonElement, actionType) => {

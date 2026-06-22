@@ -110,6 +110,9 @@
     --sidebar-border: rgba(255, 255, 255, 0.06);
     --sidebar-icon-size: 24px;
     --sidebar-action-size: 40px;
+    --deep-search-active-bg: rgba(96, 165, 250, 0.22);
+    --deep-search-active-text: #cfe6ff;
+    --deep-search-active-border: rgba(96, 165, 250, 0.55);
 }
 
 .light_mode{
@@ -140,6 +143,9 @@
     --prose-quote-bg: rgba(21, 95, 221, 0.08);
     --sidebar-bg: #edf2f8;
     --sidebar-border: rgba(30, 40, 60, 0.1);
+    --deep-search-active-bg: rgba(21, 95, 221, 0.14);
+    --deep-search-active-text: #114fb8;
+    --deep-search-active-border: rgba(21, 95, 221, 0.42);
 }
 
 html,
@@ -254,6 +260,35 @@ body.hide-header .header{
 
 .model-picker{
     position: relative;
+}
+
+.deep-search-toggle{
+    border: 1px solid transparent;
+    background: transparent;
+    color: var(--text-secondary-color);
+    border-radius: 999px;
+    padding: 0.34rem 0.72rem;
+    display: inline-flex;
+    align-items: center;
+    gap: 0.35rem;
+    font-size: 0.9rem;
+    cursor: pointer;
+    transition: background 0.18s ease, color 0.18s ease, border-color 0.18s ease;
+}
+
+.deep-search-toggle:hover{
+    background: color-mix(in srgb, var(--secondary-hover-color) 64%, transparent);
+    color: var(--text-color);
+}
+
+.deep-search-toggle i{
+    font-size: 1rem;
+}
+
+.deep-search-toggle.is-active{
+    background: var(--deep-search-active-bg);
+    color: var(--deep-search-active-text);
+    border-color: var(--deep-search-active-border);
 }
 
 .model-picker__trigger{
@@ -2169,6 +2204,11 @@ td{
     .model-picker__title{
         max-width: none;
         font-size: 1.02rem;
+    }
+
+    .deep-search-toggle{
+        padding: 0.3rem 0.58rem;
+        font-size: 0.84rem;
     }
 
     .model-picker__panel{

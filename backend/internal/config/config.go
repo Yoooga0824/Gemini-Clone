@@ -21,6 +21,11 @@ type Config struct {
 	JWTExpiryHours  int
 	AvatarUploadDir string
 	AvatarMaxBytes  int64
+
+	WebSearchProvider   string
+	WebSearchMaxResults int
+	TavilyBaseURL       string
+	TavilyAPIKey        string
 }
 
 type ProviderConfig struct {
@@ -94,6 +99,12 @@ func Load() (Config, error) {
 		JWTExpiryHours:  getEnvInt("JWT_EXPIRY_HOURS", 168),
 		AvatarUploadDir: getEnv("AVATAR_UPLOAD_DIR", "./uploads/avatars"),
 		AvatarMaxBytes:  getEnvInt64("AVATAR_MAX_BYTES", 3*1024*1024),
+		WebSearchProvider: strings.ToLower(strings.TrimSpace(
+			getEnv("WEB_SEARCH_PROVIDER", "tavily"),
+		)),
+		WebSearchMaxResults: getEnvInt("WEB_SEARCH_MAX_RESULTS", 5),
+		TavilyBaseURL:       strings.TrimSpace(getEnv("TAVILY_BASE_URL", "https://api.tavily.com")),
+		TavilyAPIKey:        strings.TrimSpace(getEnv("TAVILY_API_KEY", "")),
 	}
 
 	cfg.ModelProviders, cfg.ModelOrder = loadProviderConfigs()
