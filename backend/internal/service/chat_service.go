@@ -34,6 +34,8 @@ type ChatStore interface {
 	ListSessionMessages(ctx context.Context, userID, sessionID int64) ([]model.ChatMessageItem, error)
 	ListRecentTurns(ctx context.Context, userID, sessionID int64, limit int) ([]model.ChatTurn, error)
 	SaveTurn(ctx context.Context, userID, sessionID int64, userMessage, assistantContent, assistantReasoning string) error
+	SaveUserMessage(ctx context.Context, userID, sessionID int64, userMessage string) error
+	SaveAssistantMessage(ctx context.Context, userID, sessionID int64, assistantContent, assistantReasoning string) error
 	UpdateSessionTitle(ctx context.Context, userID, sessionID int64, title string) error
 }
 
@@ -220,6 +222,7 @@ func (s *ChatService) StreamReplyMulti(
 	userMessage string,
 	requestedModels []string,
 	replyOptions model.ReplyOptions,
+	onSessionReady func(model.ChatSessionSummary) error,
 	onDelta func(modelKey string, delta model.AssistantReplyDelta) error,
 	onModelError func(modelKey string, err error) error,
 ) ([]model.ModelAssistantResponse, model.ChatSessionSummary, error) {
@@ -253,6 +256,17 @@ func (s *ChatService) StreamReplyMulti(
 	if err != nil {
 		return nil, model.ChatSessionSummary{}, err
 	}
+	if err := s.store.SaveUserMessage(ctx, userID, session.ID, trimmed); err != nil {
+		return nil, model.ChatSessionSummary{}, err
+	}
+	if err := s.syncSessionTitle(ctx, userID, session, trimmed); err != nil {
+		return nil, model.ChatSessionSummary{}, err
+	}
+	if onSessionReady != nil {
+		if err := onSessionReady(session); err != nil {
+			return nil, model.ChatSessionSummary{}, err
+		}
+	}
 
 	assistantReplies, err := s.collectModelReplies(
 		ctx,
@@ -266,7 +280,7 @@ func (s *ChatService) StreamReplyMulti(
 	if err != nil {
 		return nil, model.ChatSessionSummary{}, err
 	}
-	session, err = s.persistAssistantResponses(ctx, userID, session, trimmed, assistantReplies)
+	session, err = s.persistStreamAssistantResponses(ctx, userID, session, assistantReplies)
 	if err != nil {
 		return nil, model.ChatSessionSummary{}, err
 	}
@@ -374,6 +388,26 @@ func (s *ChatService) persistAssistantResponses(
 	userMessage string,
 	assistantReplies []model.ModelAssistantResponse,
 ) (model.ChatSessionSummary, error) {
+	return s.persistAssistantResponsesWithMode(ctx, userID, session, userMessage, assistantReplies, false)
+}
+
+func (s *ChatService) persistStreamAssistantResponses(
+	ctx context.Context,
+	userID int64,
+	session model.ChatSessionSummary,
+	assistantReplies []model.ModelAssistantResponse,
+) (model.ChatSessionSummary, error) {
+	return s.persistAssistantResponsesWithMode(ctx, userID, session, "", assistantReplies, true)
+}
+
+func (s *ChatService) persistAssistantResponsesWithMode(
+	ctx context.Context,
+	userID int64,
+	session model.ChatSessionSummary,
+	userMessage string,
+	assistantReplies []model.ModelAssistantResponse,
+	userAlreadySaved bool,
+) (model.ChatSessionSummary, error) {
 	// 统一处理回复落库、标题同步、会话刷新与 token 统计，保证单/多模型路径一致。
 	if len(assistantReplies) == 0 {
 		return model.ChatSessionSummary{}, fmt.Errorf("empty model response")
@@ -390,11 +424,19 @@ func (s *ChatService) persistAssistantResponses(
 		assistantContent = payloadText
 		assistantReasoning = ""
 	}
-	if err := s.store.SaveTurn(ctx, userID, session.ID, userMessage, assistantContent, assistantReasoning); err != nil {
-		return model.ChatSessionSummary{}, err
+	if userAlreadySaved {
+		if err := s.store.SaveAssistantMessage(ctx, userID, session.ID, assistantContent, assistantReasoning); err != nil {
+			return model.ChatSessionSummary{}, err
+		}
+	} else {
+		if err := s.store.SaveTurn(ctx, userID, session.ID, userMessage, assistantContent, assistantReasoning); err != nil {
+			return model.ChatSessionSummary{}, err
+		}
 	}
-	if err := s.syncSessionTitle(ctx, userID, session, userMessage); err != nil {
-		return model.ChatSessionSummary{}, err
+	if !userAlreadySaved {
+		if err := s.syncSessionTitle(ctx, userID, session, userMessage); err != nil {
+			return model.ChatSessionSummary{}, err
+		}
 	}
 	updatedSession, err := s.store.GetSession(ctx, userID, session.ID)
 	if err != nil {
@@ -583,6 +625,9 @@ func (s *ChatService) buildMessageWithRecentTurns(
 	builder.WriteString("你会收到当前对话的最近历史，请仅将其作为上下文，不要机械复述。\n\n")
 	builder.WriteString("[最近历史]\n")
 	for _, turn := range turns {
+		if strings.TrimSpace(turn.AssistantContent) == "" && strings.TrimSpace(turn.AssistantReasoning) == "" {
+			continue
+		}
 		if turn.UserMessage != "" {
 			builder.WriteString("用户: ")
 			builder.WriteString(turn.UserMessage)

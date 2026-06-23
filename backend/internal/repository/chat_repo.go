@@ -254,6 +254,117 @@ func (r *ChatRepository) ListRecentTurns(ctx context.Context, userID, sessionID 
 	return filtered, nil
 }
 
+func (r *ChatRepository) SaveUserMessage(
+	ctx context.Context,
+	userID, sessionID int64,
+	userMessage string,
+) error {
+	tx, err := r.db.BeginTx(ctx, nil)
+	if err != nil {
+		return fmt.Errorf("begin save user message transaction: %w", err)
+	}
+	defer func() {
+		_ = tx.Rollback()
+	}()
+
+	const ensureSessionQuery = `
+		SELECT id
+		FROM chat_sessions
+		WHERE id = ? AND user_id = ?
+		LIMIT 1
+	`
+	var ensuredID int64
+	if err := tx.QueryRowContext(ctx, ensureSessionQuery, sessionID, userID).Scan(&ensuredID); err != nil {
+		if errors.Is(err, sql.ErrNoRows) {
+			return sql.ErrNoRows
+		}
+		return fmt.Errorf("ensure chat session owner: %w", err)
+	}
+
+	insertQuery := `
+		INSERT INTO chat_messages (session_id, role, content, reasoning_content)
+		VALUES (?, 'user', ?, '')
+	`
+	if _, err := tx.ExecContext(
+		ctx,
+		insertQuery,
+		sessionID,
+		strings.TrimSpace(userMessage),
+	); err != nil {
+		return fmt.Errorf("save user chat message: %w", err)
+	}
+
+	updateQuery := `
+		UPDATE chat_sessions
+		SET updated_at = CURRENT_TIMESTAMP
+		WHERE id = ? AND user_id = ?
+	`
+	if _, err := tx.ExecContext(ctx, updateQuery, sessionID, userID); err != nil {
+		return fmt.Errorf("touch chat session: %w", err)
+	}
+
+	if err := tx.Commit(); err != nil {
+		return fmt.Errorf("commit save user message transaction: %w", err)
+	}
+	return nil
+}
+
+func (r *ChatRepository) SaveAssistantMessage(
+	ctx context.Context,
+	userID, sessionID int64,
+	assistantContent, assistantReasoning string,
+) error {
+	tx, err := r.db.BeginTx(ctx, nil)
+	if err != nil {
+		return fmt.Errorf("begin save assistant message transaction: %w", err)
+	}
+	defer func() {
+		_ = tx.Rollback()
+	}()
+
+	const ensureSessionQuery = `
+		SELECT id
+		FROM chat_sessions
+		WHERE id = ? AND user_id = ?
+		LIMIT 1
+	`
+	var ensuredID int64
+	if err := tx.QueryRowContext(ctx, ensureSessionQuery, sessionID, userID).Scan(&ensuredID); err != nil {
+		if errors.Is(err, sql.ErrNoRows) {
+			return sql.ErrNoRows
+		}
+		return fmt.Errorf("ensure chat session owner: %w", err)
+	}
+
+	insertQuery := `
+		INSERT INTO chat_messages (session_id, role, content, reasoning_content)
+		VALUES (?, 'assistant', ?, ?)
+	`
+	if _, err := tx.ExecContext(
+		ctx,
+		insertQuery,
+		sessionID,
+		strings.TrimSpace(assistantContent),
+		strings.TrimSpace(assistantReasoning),
+	); err != nil {
+		return fmt.Errorf("save assistant chat message: %w", err)
+	}
+
+	updateQuery := `
+		UPDATE chat_sessions
+		SET updated_at = CURRENT_TIMESTAMP
+		WHERE id = ? AND user_id = ?
+	`
+	if _, err := tx.ExecContext(ctx, updateQuery, sessionID, userID); err != nil {
+		return fmt.Errorf("touch chat session: %w", err)
+	}
+
+	if err := tx.Commit(); err != nil {
+		return fmt.Errorf("commit save assistant message transaction: %w", err)
+	}
+	return nil
+}
+
 func (r *ChatRepository) SaveTurn(
 	ctx context.Context,
 	userID, sessionID int64,

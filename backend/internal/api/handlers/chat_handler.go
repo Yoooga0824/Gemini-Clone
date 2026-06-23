@@ -118,6 +118,12 @@ func (h *ChatHandler) postChatStream(w http.ResponseWriter, r *http.Request, req
 		req.Message,
 		req.Models,
 		model.ReplyOptions{DeepSearch: req.DeepSearch},
+		func(session model.ChatSessionSummary) error {
+			return sendEvent(map[string]any{
+				"type":    "session",
+				"session": session,
+			})
+		},
 		func(modelKey string, delta model.AssistantReplyDelta) error {
 			return sendEvent(map[string]string{
 				"type":              "delta",

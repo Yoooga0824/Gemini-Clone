@@ -47,7 +47,7 @@ const deepSearchToggle = document.getElementById("deepSearchToggle");
 
 // State variables
 let currentUserMessage = null;
-let isGeneratingResponse = false;
+const sessionGenerationState = new Map();
 let pendingAttachments = [];
 let chatSessions = [];
 let activeSessionId = null;
@@ -979,14 +979,96 @@ const updateActiveSessionTitle = (nextTitle) => {
 
 const appendMessageToActiveSession = (message) => {
   if (!activeSessionId || !message) return;
+  appendMessageToSession(activeSessionId, message);
+};
+
+const appendMessageToSession = (sessionId, message) => {
+  if (!sessionId || !message) return;
   chatSessions = chatSessions.map((session) => {
-    if (session.id !== activeSessionId) return session;
+    if (session.id !== sessionId) return session;
     return {
       ...session,
       messages: [...(session.messages || []), message],
       loaded: true,
     };
   });
+};
+
+const updateStreamingAssistantInSession = (sessionId, patch = {}) => {
+  if (!sessionId) return;
+  chatSessions = chatSessions.map((session) => {
+    if (session.id !== sessionId) return session;
+    const messages = [...(session.messages || [])];
+    for (let i = messages.length - 1; i >= 0; i -= 1) {
+      if (messages[i]?.role === "assistant" && messages[i]?.streaming) {
+        messages[i] = { ...messages[i], ...patch };
+        break;
+      }
+    }
+    return { ...session, messages };
+  });
+};
+
+const finalizeStreamingAssistantInSession = (sessionId, finalMessage = {}) => {
+  if (!sessionId) return;
+  chatSessions = chatSessions.map((session) => {
+    if (session.id !== sessionId) return session;
+    const messages = [...(session.messages || [])];
+    for (let i = messages.length - 1; i >= 0; i -= 1) {
+      if (messages[i]?.role === "assistant" && messages[i]?.streaming) {
+        const nextMessage = { ...messages[i], ...finalMessage };
+        delete nextMessage.streaming;
+        messages[i] = nextMessage;
+        break;
+      }
+    }
+    return { ...session, messages, loaded: true };
+  });
+};
+
+const isSessionGenerating = (sessionId) => {
+  if (!sessionId) return false;
+  return sessionGenerationState.get(sessionId)?.generating === true;
+};
+
+const isActiveSessionGenerating = () => isSessionGenerating(activeSessionId);
+
+const setSessionGenerating = (sessionId, generating, extra = {}) => {
+  if (!sessionId) return;
+  if (generating) {
+    sessionGenerationState.set(sessionId, { generating: true, ...extra });
+    return;
+  }
+  sessionGenerationState.delete(sessionId);
+};
+
+const registerSessionStreamDom = (sessionId, incomingMessageElement, messageTextElement) => {
+  if (!sessionId || !incomingMessageElement || !messageTextElement) return;
+  const existing = sessionGenerationState.get(sessionId) || { generating: true };
+  sessionGenerationState.set(sessionId, {
+    ...existing,
+    generating: true,
+    incomingMessageElement,
+    messageTextElement,
+  });
+};
+
+const getSessionStreamDom = (sessionId) => {
+  const state = sessionGenerationState.get(sessionId);
+  if (!state?.incomingMessageElement || !state?.messageTextElement) return null;
+  if (!document.contains(state.incomingMessageElement)) return null;
+  return {
+    incomingMessageElement: state.incomingMessageElement,
+    messageTextElement: state.messageTextElement,
+  };
+};
+
+const remapSessionGenerationState = (oldId, newId) => {
+  if (!oldId || !newId || oldId === newId) return;
+  const existing = sessionGenerationState.get(oldId);
+  if (!existing) return;
+  sessionGenerationState.delete(oldId);
+  sessionGenerationState.set(newId, existing);
 };
 
 const appendAssistantToActiveSession = (content = "", reasoning = "") => {
@@ -1059,15 +1141,15 @@ const extractAssistantModelResponsesFromSession = (serverSession = null, fallbac
   return fallbackSingle.content || fallbackSingle.reasoning_content ? [fallbackSingle] : [];
 };
 
-const syncActiveSessionFromServer = (serverSession = null) => {
+const syncSessionFromServer = (serverSession = null, targetSessionId = null, sessionRef = null) => {
   if (!serverSession?.id) return;
   const nextId = String(serverSession.id);
-  const currentActiveId = activeSessionId;
-  if (!currentActiveId) return;
+  const lookupId = targetSessionId ?? activeSessionId;
+  if (!lookupId) return;
 
   const exists = chatSessions.some((session) => session.id === nextId);
   chatSessions = chatSessions.map((session) => {
-    if (session.id !== currentActiveId) return session;
+    if (session.id !== lookupId) return session;
     return {
       ...session,
       id: nextId,
@@ -1075,11 +1157,21 @@ const syncActiveSessionFromServer = (serverSession = null) => {
       loaded: true,
     };
   });
-  if (currentActiveId !== nextId && exists) {
-    chatSessions = chatSessions.filter((session) => session.id !== currentActiveId);
+  if (lookupId !== nextId && exists) {
+    chatSessions = chatSessions.filter((session) => session.id !== lookupId);
   }
-  activeSessionId = nextId;
+  remapSessionGenerationState(lookupId, nextId);
+  if (sessionRef && sessionRef.id === lookupId) {
+    sessionRef.id = nextId;
+  }
+  if (activeSessionId === lookupId) {
+    activeSessionId = nextId;
+  }
   renderSidebarSessions();
+};
+
+const syncActiveSessionFromServer = (serverSession = null) => {
+  syncSessionFromServer(serverSession, activeSessionId);
 };
 
 const renderOutgoingMessage = (text) => {
@@ -1201,6 +1293,65 @@ const setupAssistantModelTrack = (
   });
 };
 
+const renderStreamingAssistantShell = (message = {}, options = {}) => {
+  const loadingHtml = `
+        <div class="message__content">
+            <img class="message__avatar" src="assets/YoooFind.png" alt="Gemini avatar">
+            <div class="message__body">
+                <div class="message__thinking-status">${escapeHtml(options.statusText || "正在生成回答...")}</div>
+                <div class="message__model-track hide">
+                    <div class="message__model-track-label">回答轨道</div>
+                    <div class="message__model-tabs"></div>
+                </div>
+                <div class="message__reasoning hide">
+                    <div class="message__reasoning-header">
+                        <div class="message__reasoning-title">深度思考</div>
+                    </div>
+                    <div class="message__reasoning-text"></div>
+                </div>
+                <div class="message__text"></div>
+            </div>
+        </div>
+        <div class="message__actions hide">
+            <button type="button" class="message__action-btn" data-action="copy" title="复制"><i class='bx bx-copy-alt'></i></button>
+            <button type="button" class="message__action-btn" data-action="like" title="点赞"><i class='bx bx-like'></i></button>
+            <button type="button" class="message__action-btn" data-action="dislike" title="点踩"><i class='bx bx-dislike'></i></button>
+            <button type="button" class="message__action-btn" data-action="retry" title="重试"><i class='bx bx-refresh'></i></button>
+        </div>
+    `;
+
+  const incomingMessageElement = createChatMessageElement(
+    loadingHtml,
+    "message--incoming",
+    "message--loading"
+  );
+  chatHistoryContainer.appendChild(incomingMessageElement);
+  const messageTextElement = incomingMessageElement.querySelector(".message__text");
+  const modelResponses = Array.isArray(message.model_responses) ? message.model_responses : [];
+  if (modelResponses.length > 1) {
+    setupAssistantModelTrack(
+      incomingMessageElement,
+      modelResponses,
+      message.selected_model || message.model || modelResponses[0]?.model
+    );
+    const active = pickModelResponse(
+      modelResponses,
+      message.selected_model || message.model || modelResponses[0]?.model
+    );
+    renderAssistantPayloadIntoElement(incomingMessageElement, active);
+  } else if (message.content || message.reasoning_content) {
+    messageTextElement.innerHTML = marked.parse(message.content || "");
+    renderReasoningPanel(incomingMessageElement, message.reasoning_content || "", {
+      collapseByDefault: false,
+      streaming: true,
+    });
+    void enhanceMessageBody(messageTextElement);
+  } else {
+    showReasoningLoading(incomingMessageElement);
+  }
+  return { incomingMessageElement, messageTextElement };
+};
+
 const renderAssistantMessage = (content = "", reasoning = "", options = {}) => {
   const normalizedResponses = Array.isArray(options.modelResponses)
     ? options.modelResponses
@@ -1246,10 +1397,19 @@ const renderAssistantMessage = (content = "", reasoning = "", options = {}) => {
 
 const renderActiveSessionMessages = () => {
   const session = getActiveSession();
-  resetChatCanvas();
+  clearChatHistoryDom();
   if (!session || !Array.isArray(session.messages)) return;
   session.messages.forEach((message) => {
     if (message.role === "assistant") {
+      if (message.streaming) {
+        const { incomingMessageElement, messageTextElement } = renderStreamingAssistantShell(message, {
+          statusText: isSessionGenerating(session.id) ? "正在生成回答..." : "回答未完成",
+        });
+        if (isSessionGenerating(session.id)) {
+          registerSessionStreamDom(session.id, incomingMessageElement, messageTextElement);
+        }
+        return;
+      }
       renderAssistantMessage(message.content || "", message.reasoning_content || "", {
         modelResponses: message.model_responses || [],
         selectedModel: message.selected_model || message.model || "",
@@ -1324,11 +1484,14 @@ const loadRemoteChatSessions = async () => {
   renderActiveSessionMessages();
 };
 
-const resetChatCanvas = () => {
+const clearChatHistoryDom = () => {
   chatHistoryContainer.innerHTML = "";
   document.body.classList.remove("hide-header");
   shouldAutoScroll = true;
-  isGeneratingResponse = false;
+};
+
+const resetChatCanvas = () => {
+  clearChatHistoryDom();
   pendingAttachments = [];
   renderPendingAttachments();
   messageForm.reset();
@@ -1337,7 +1500,6 @@ const resetChatCanvas = () => {
 };
 
 const handleCreateNewChat = () => {
-  if (isGeneratingResponse) return;
   const currentSession = chatSessions.find((session) => session.id === activeSessionId);
   const isAlreadyFreshChat =
     !!currentSession &&
@@ -1955,7 +2117,8 @@ const showTypingEffect = (
   messageElement,
   incomingMessageElement,
   skipEffect = false,
-  reasoningText = ""
+  reasoningText = "",
+  requestSessionId = null
 ) => {
   const actionsElement = incomingMessageElement.querySelector(".message__actions");
   actionsElement?.classList.add("hide");
@@ -1963,12 +2126,18 @@ const showTypingEffect = (
     collapseByDefault: true,
   });
 
+  const finishTyping = () => {
+    if (requestSessionId) {
+      setSessionGenerating(requestSessionId, false);
+    }
+  };
+
   if (skipEffect) {
     // Display content directly without typing
     messageElement.innerHTML = htmlText;
     void enhanceMessageBody(messageElement);
     actionsElement?.classList.remove("hide");
-    isGeneratingResponse = false;
+    finishTyping();
     scrollChatsToBottom("auto");
     return;
   }
@@ -1978,7 +2147,7 @@ const showTypingEffect = (
     messageElement.innerHTML = htmlText;
     void enhanceMessageBody(messageElement);
     actionsElement?.classList.remove("hide");
-    isGeneratingResponse = false;
+    finishTyping();
     scrollChatsToBottom("auto");
     return;
   }
@@ -1992,7 +2161,7 @@ const showTypingEffect = (
     scrollChatsToBottom("auto");
     if (tokenIndex === tokens.length) {
       clearInterval(typingInterval);
-      isGeneratingResponse = false;
+      finishTyping();
       messageElement.innerHTML = htmlText;
       void enhanceMessageBody(messageElement);
       actionsElement?.classList.remove("hide");
@@ -2001,14 +2170,33 @@ const showTypingEffect = (
   }, 25);
 };
 
+const resolveStreamDom = (requestSessionId, fallbackIncoming, fallbackText, streamSessionRef = null) => {
+  const boundSessionId = streamSessionRef?.id || requestSessionId;
+  if (activeSessionId !== boundSessionId) return null;
+  const registered = getSessionStreamDom(boundSessionId);
+  if (registered) return registered;
+  if (fallbackIncoming && document.contains(fallbackIncoming) && fallbackText) {
+    return {
+      incomingMessageElement: fallbackIncoming,
+      messageTextElement: fallbackText,
+    };
+  }
+  return null;
+};
+
 const consumeAssistantEventStream = async (
   response,
   messageElement,
-  incomingMessageElement
+  incomingMessageElement,
+  requestSessionId = null,
+  streamSessionRef = null
 ) => {
   if (!response.body) {
     throw new Error("stream body unavailable");
   }
+
+  const getStreamDom = () =>
+    resolveStreamDom(requestSessionId, incomingMessageElement, messageElement, streamSessionRef);
 
   const actionsElement = incomingMessageElement.querySelector(".message__actions");
   actionsElement?.classList.add("hide");
@@ -2028,10 +2216,23 @@ const consumeAssistantEventStream = async (
   let contentTypewriterTimer = null;
   const CONTENT_TYPEWRITER_DELAY_MS = 16;
   const syncThinkingAvatar = () => {
-    incomingMessageElement.classList.toggle(
+    const dom = getStreamDom();
+    if (!dom) return;
+    dom.incomingMessageElement.classList.toggle(
       "message--thinking",
       hasReasoningSignal && !streamCompleted
     );
+  };
+
+  const getBoundSessionId = () => streamSessionRef?.id || requestSessionId;
+
+  const syncStreamingSessionState = () => {
+    const boundSessionId = getBoundSessionId();
+    if (!boundSessionId) return;
+    updateStreamingAssistantInSession(boundSessionId, {
+      content: visibleContent || "",
+      reasoning_content: visibleReasoning || "",
+    });
   };
 
   const stripReasoningOverlap = (contentText, reasoningText) => {
@@ -2083,8 +2284,11 @@ const consumeAssistantEventStream = async (
   };
 
   const renderCurrentFrame = () => {
-    messageElement.innerHTML = marked.parse(renderedContent || "");
-    renderReasoningPanel(incomingMessageElement, visibleReasoning, {
+    syncStreamingSessionState();
+    const dom = getStreamDom();
+    if (!dom) return;
+    dom.messageTextElement.innerHTML = marked.parse(renderedContent || "");
+    renderReasoningPanel(dom.incomingMessageElement, visibleReasoning, {
       collapseByDefault: false,
       streaming: true,
     });
@@ -2147,7 +2351,8 @@ const consumeAssistantEventStream = async (
       visibleReasoning += chunk;
       syncThinkingAvatar();
       if (!streamStarted) {
-        incomingMessageElement.classList.remove("message--loading");
+        const dom = getStreamDom();
+        dom?.incomingMessageElement.classList.remove("message--loading");
         streamStarted = true;
       }
       applyRender();
@@ -2243,6 +2448,12 @@ const consumeAssistantEventStream = async (
         throw new Error(eventData.error || "stream failed");
       }
 
+      if (eventData.type === "session") {
+        syncSessionFromServer(eventData?.session || null, requestSessionId, streamSessionRef);
+        boundaryIndex = buffered.indexOf("\n\n");
+        continue;
+      }
+
       if (eventData.type === "delta" || eventData.type === "done") {
         if (eventData.type === "done") {
           streamCompleted = true;
@@ -2293,7 +2504,8 @@ const consumeAssistantEventStream = async (
         }
 
         if (!streamStarted) {
-          incomingMessageElement.classList.remove("message--loading");
+          const dom = getStreamDom();
+          dom?.incomingMessageElement.classList.remove("message--loading");
           streamStarted = true;
         }
         applyRender();
@@ -2303,16 +2515,21 @@ const consumeAssistantEventStream = async (
     }
   }
 
-  incomingMessageElement.classList.remove("message--loading");
-  incomingMessageElement.classList.remove("message--thinking");
+  const finalDom = getStreamDom();
+  finalDom?.incomingMessageElement.classList.remove("message--loading");
+  finalDom?.incomingMessageElement.classList.remove("message--thinking");
   if (contentTypewriterTimer) {
     clearInterval(contentTypewriterTimer);
     contentTypewriterTimer = null;
   }
   applyRender();
-  await enhanceMessageBody(messageElement);
-  actionsElement?.classList.remove("hide");
-  isGeneratingResponse = false;
+  if (finalDom?.messageTextElement) {
+    await enhanceMessageBody(finalDom.messageTextElement);
+    finalDom.incomingMessageElement.querySelector(".message__actions")?.classList.remove("hide");
+  }
+  if (streamSessionRef?.id || requestSessionId) {
+    setSessionGenerating(streamSessionRef?.id || requestSessionId, false);
+  }
   scrollChatsToBottom("auto");
   return {
     content: visibleContent || "",
@@ -2325,11 +2542,16 @@ const consumeAssistantEventStreamMulti = async (
   response,
   messageElement,
   incomingMessageElement,
-  requestedModels = []
+  requestedModels = [],
+  requestSessionId = null,
+  streamSessionRef = null
 ) => {
   if (!response.body) {
     throw new Error("stream body unavailable");
   }
+
+  const getStreamDom = () =>
+    resolveStreamDom(requestSessionId, incomingMessageElement, messageElement, streamSessionRef);
 
   const actionsElement = incomingMessageElement.querySelector(".message__actions");
   actionsElement?.classList.add("hide");
@@ -2350,10 +2572,35 @@ const consumeAssistantEventStreamMulti = async (
   let hasReasoningSignal = false;
   let resolvedSession = null;
   const syncThinkingAvatar = () => {
-    incomingMessageElement.classList.toggle(
+    const dom = getStreamDom();
+    if (!dom) return;
+    dom.incomingMessageElement.classList.toggle(
       "message--thinking",
       hasReasoningSignal && !streamCompleted
     );
+  };
+
+  const getBoundSessionId = () => streamSessionRef?.id || requestSessionId;
+
+  const syncStreamingSessionState = () => {
+    const boundSessionId = getBoundSessionId();
+    if (!boundSessionId) return;
+    const modelResponses = [...trackStates.values()]
+      .map((item) => ({
+        model: item.model,
+        content: item.content || "",
+        reasoning_content: item.reasoning_content || "",
+        error: item.error || "",
+      }))
+      .filter((item) => item.model && (item.content || item.reasoning_content || item.error));
+    const activeState = trackStates.get(activeModel);
+    updateStreamingAssistantInSession(boundSessionId, {
+      model: activeModel,
+      content: activeState?.content || "",
+      reasoning_content: activeState?.reasoning_content || "",
+      selected_model: activeModel,
+      model_responses: modelResponses,
+    });
   };
 
   const ensureTrackState = (modelKey) => {
@@ -2366,13 +2613,17 @@ const consumeAssistantEventStreamMulti = async (
   };
 
   const renderTrackTabs = () => {
-    if (!trackElement || !tabsElement) return;
-    trackElement.classList.remove("hide");
+    const dom = getStreamDom();
+    if (!dom) return;
+    const localTrackElement = dom.incomingMessageElement.querySelector(".message__model-track");
+    const localTabsElement = dom.incomingMessageElement.querySelector(".message__model-tabs");
+    if (!localTrackElement || !localTabsElement) return;
+    localTrackElement.classList.remove("hide");
     const orderedModels = [...new Set([...modelOrder, ...trackStates.keys()])];
     const nextRenderKey = `${activeModel}::${orderedModels.join("|")}`;
     if (tabsRenderKey === nextRenderKey) return;
     tabsRenderKey = nextRenderKey;
-    tabsElement.innerHTML = orderedModels
+    localTabsElement.innerHTML = orderedModels
       .map(
         (modelKey) => {
           const modelState = trackStates.get(modelKey);
@@ -2391,10 +2642,13 @@ const consumeAssistantEventStreamMulti = async (
   };
 
   const renderActiveTrack = () => {
+    syncStreamingSessionState();
+    const dom = getStreamDom();
+    if (!dom) return;
     const state = trackStates.get(activeModel) || { content: "", reasoning_content: "", error: "" };
     const fallbackErrorText = state.error ? `该模型回答失败：${state.error}` : "";
-    messageElement.innerHTML = marked.parse(state.content || fallbackErrorText);
-    renderReasoningPanel(incomingMessageElement, state.reasoning_content || "", {
+    dom.messageTextElement.innerHTML = marked.parse(state.content || fallbackErrorText);
+    renderReasoningPanel(dom.incomingMessageElement, state.reasoning_content || "", {
       collapseByDefault: false,
       streaming: true,
     });
@@ -2410,7 +2664,8 @@ const consumeAssistantEventStreamMulti = async (
     for (const chunk of chunks) {
       state.reasoning_content += chunk;
       if (!streamStarted) {
-        incomingMessageElement.classList.remove("message--loading");
+        const dom = getStreamDom();
+        dom?.incomingMessageElement.classList.remove("message--loading");
         streamStarted = true;
       }
       if (state.model === activeModel) {
@@ -2429,7 +2684,8 @@ const consumeAssistantEventStreamMulti = async (
     for (const chunk of chunks) {
       state.content += chunk;
       if (!streamStarted) {
-        incomingMessageElement.classList.remove("message--loading");
+        const dom = getStreamDom();
+        dom?.incomingMessageElement.classList.remove("message--loading");
         streamStarted = true;
       }
       if (state.model === activeModel) {
@@ -2491,6 +2747,12 @@ const consumeAssistantEventStreamMulti = async (
         throw new Error(eventData.error || "stream failed");
       }
 
+      if (eventData.type === "session") {
+        syncSessionFromServer(eventData?.session || null, requestSessionId, streamSessionRef);
+        boundaryIndex = buffered.indexOf("\n\n");
+        continue;
+      }
+
       if (eventData.type === "delta") {
         const deltaModel = String(eventData.model || modelOrder[0] || activeModel || "mimo")
           .trim()
@@ -2509,7 +2771,8 @@ const consumeAssistantEventStreamMulti = async (
           await appendTrackReasoningSmoothly(state, eventData.reasoning_content);
         }
         if (!streamStarted) {
-          incomingMessageElement.classList.remove("message--loading");
+          const dom = getStreamDom();
+          dom?.incomingMessageElement.classList.remove("message--loading");
           streamStarted = true;
         }
         const knownModelBefore = modelOrder.includes(deltaModel);
@@ -2541,7 +2804,8 @@ const consumeAssistantEventStreamMulti = async (
         state.error = String(eventData.error || "请求失败");
         state.done = true;
         if (!streamStarted) {
-          incomingMessageElement.classList.remove("message--loading");
+          const dom = getStreamDom();
+          dom?.incomingMessageElement.classList.remove("message--loading");
           streamStarted = true;
         }
         if (failedModel === activeModel) {
@@ -2596,8 +2860,9 @@ const consumeAssistantEventStreamMulti = async (
             activeModel = pickModelResponse(finalResponses, activeBeforeDone).model;
           }
         }
-        incomingMessageElement.classList.remove("message--loading");
-        incomingMessageElement.classList.remove("message--thinking");
+        const doneDom = getStreamDom();
+        doneDom?.incomingMessageElement.classList.remove("message--loading");
+        doneDom?.incomingMessageElement.classList.remove("message--thinking");
         renderTrackTabs();
         renderActiveTrack();
       }
@@ -2606,10 +2871,15 @@ const consumeAssistantEventStreamMulti = async (
     }
   }
 
-  await enhanceMessageBody(messageElement);
-  actionsElement?.classList.remove("hide");
-  incomingMessageElement.classList.remove("message--thinking");
-  isGeneratingResponse = false;
+  const finalDom = getStreamDom();
+  if (finalDom?.messageTextElement) {
+    await enhanceMessageBody(finalDom.messageTextElement);
+    finalDom.incomingMessageElement.querySelector(".message__actions")?.classList.remove("hide");
+    finalDom.incomingMessageElement.classList.remove("message--thinking");
+  }
+  if (streamSessionRef?.id || requestSessionId) {
+    setSessionGenerating(streamSessionRef?.id || requestSessionId, false);
+  }
   scrollChatsToBottom("auto");
 
   const modelResponses = [...trackStates.values()]
@@ -2629,13 +2899,14 @@ const consumeAssistantEventStreamMulti = async (
 };
 
 // Fetch API response based on user input
-const requestApiResponse = async (incomingMessageElement, requestedModels = []) => {
+const requestApiResponse = async (incomingMessageElement, requestedModels = [], requestSessionId = null) => {
   const messageTextElement =
     incomingMessageElement.querySelector(".message__text");
   const normalizedRequestedModels = normalizeModelSelection(requestedModels);
+  const streamSessionRef = { id: requestSessionId || activeSessionId };
 
   if (!authToken) {
-    isGeneratingResponse = false;
+    setSessionGenerating(streamSessionRef.id, false);
     incomingMessageElement.classList.remove("message--loading");
     incomingMessageElement.classList.remove("message--thinking");
     messageTextElement.innerText = "请先登录后再发送消息。";
@@ -2645,7 +2916,7 @@ const requestApiResponse = async (incomingMessageElement, requestedModels = []) 
   }
 
   try {
-    const sessionId = getPersistedSessionId(activeSessionId);
+    const sessionId = getPersistedSessionId(streamSessionRef.id);
     const response = await authFetch(API_REQUEST_URL, {
       method: "POST",
       headers: {
@@ -2686,39 +2957,47 @@ const requestApiResponse = async (incomingMessageElement, requestedModels = []) 
           response,
           messageTextElement,
           incomingMessageElement,
-          normalizedRequestedModels
+          normalizedRequestedModels,
+          streamSessionRef.id,
+          streamSessionRef
         );
         const multiResponses = normalizeModelResponses(
           multiStreamResult?.modelResponses || [],
           normalizedRequestedModels
         );
+        const boundSessionId = streamSessionRef.id;
         if (multiResponses.length > 1) {
-          appendAssistantResponsesToActiveSession(
-            multiResponses,
-            multiStreamResult?.selectedModel || multiResponses[0].model
-          );
+          const selected = multiStreamResult?.selectedModel || multiResponses[0].model;
+          const picked = pickModelResponse(multiResponses, selected);
+          finalizeStreamingAssistantInSession(boundSessionId, {
+            model: picked.model,
+            content: picked.content || "",
+            reasoning_content: picked.reasoning_content || "",
+            selected_model: picked.model,
+            model_responses: multiResponses,
+          });
         } else if (multiResponses.length === 1) {
           const single = multiResponses[0];
-          appendMessageToActiveSession({
-            role: "assistant",
+          finalizeStreamingAssistantInSession(boundSessionId, {
             model: single.model,
             content: single.content || "",
             reasoning_content: single.reasoning_content || "",
           });
         } else {
-          appendMessageToActiveSession({
-            role: "assistant",
+          finalizeStreamingAssistantInSession(boundSessionId, {
             model: normalizedRequestedModels[0] || "mimo",
             content: "",
             reasoning_content: "",
           });
         }
-        syncActiveSessionFromServer(multiStreamResult?.session || null);
+        syncSessionFromServer(multiStreamResult?.session || null, boundSessionId, streamSessionRef);
       } else {
         const streamResult = await consumeAssistantEventStream(
           response,
           messageTextElement,
-          incomingMessageElement
+          incomingMessageElement,
+          streamSessionRef.id,
+          streamSessionRef
         );
         const streamModelResponses = normalizeModelResponses(
           extractAssistantModelResponsesFromSession(
@@ -2732,14 +3011,16 @@ const requestApiResponse = async (incomingMessageElement, requestedModels = []) 
           content: streamResult?.content || "",
           reasoning_content: streamResult?.reasoning || "",
         };
-        setupAssistantModelTrack(incomingMessageElement, [single], single.model);
-        appendMessageToActiveSession({
-          role: "assistant",
+        const boundSessionId = streamSessionRef.id;
+        if (activeSessionId === boundSessionId) {
+          setupAssistantModelTrack(incomingMessageElement, [single], single.model);
+        }
+        finalizeStreamingAssistantInSession(boundSessionId, {
           model: single.model,
           content: single.content || "",
           reasoning_content: single.reasoning_content || "",
         });
-        syncActiveSessionFromServer(streamResult?.session || null);
+        syncSessionFromServer(streamResult?.session || null, boundSessionId, streamSessionRef);
       }
       return;
     }
@@ -2762,6 +3043,7 @@ const requestApiResponse = async (incomingMessageElement, requestedModels = []) 
     if (modelResponses.length === 0) throw new Error("Invalid API response.");
     incomingMessageElement.classList.remove("message--loading");
     incomingMessageElement.classList.remove("message--thinking");
+    const boundSessionId = streamSessionRef.id;
     if (modelResponses.length > 1) {
       const picked = pickModelResponse(
         modelResponses,
@@ -2778,9 +3060,16 @@ const requestApiResponse = async (incomingMessageElement, requestedModels = []) 
         messageTextElement,
         incomingMessageElement,
         false,
-        picked.reasoning_content || ""
+        picked.reasoning_content || "",
+        boundSessionId
       );
-      appendAssistantResponsesToActiveSession(modelResponses, picked.model);
+      finalizeStreamingAssistantInSession(boundSessionId, {
+        model: picked.model,
+        content: picked.content || "",
+        reasoning_content: picked.reasoning_content || "",
+        selected_model: picked.model,
+        model_responses: modelResponses,
+      });
     } else {
       const single = modelResponses[0];
       showTypingEffect(
@@ -2789,22 +3078,27 @@ const requestApiResponse = async (incomingMessageElement, requestedModels = []) 
         messageTextElement,
         incomingMessageElement,
         false,
-        single.reasoning_content || ""
+        single.reasoning_content || "",
+        boundSessionId
       );
-      appendMessageToActiveSession({
-        role: "assistant",
+      finalizeStreamingAssistantInSession(boundSessionId, {
         model: single.model,
         content: single.content || "",
         reasoning_content: single.reasoning_content || "",
       });
     }
-    syncActiveSessionFromServer(responseData?.session || null);
+    syncSessionFromServer(responseData?.session || null, boundSessionId, streamSessionRef);
   } catch (error) {
-    isGeneratingResponse = false;
+    setSessionGenerating(streamSessionRef.id, false);
     incomingMessageElement.classList.remove("message--loading");
     incomingMessageElement.classList.remove("message--thinking");
     messageTextElement.innerText = error.message;
     messageTextElement.closest(".message").classList.add("message--error");
+    updateStreamingAssistantInSession(streamSessionRef.id, {
+      streaming: false,
+      content: error.message,
+      reasoning_content: "",
+    });
   }
 };
 
@@ -2853,7 +3147,7 @@ const addCopyButtonToCodeBlocks = (scopeElement = document) => {
 
 // Show loading animation during API request
 const displayLoadingAnimation = (requestModels = [], options = {}) => {
-  const { deepSearch = false } = options;
+  const { deepSearch = false, requestSessionId = activeSessionId } = options;
   const loadingHtml = `
 
         <div class="message__content">
@@ -2922,8 +3216,10 @@ const displayLoadingAnimation = (requestModels = [], options = {}) => {
   }
   showReasoningLoading(loadingMessageElement);
   scrollChatsToBottom("smooth");
+  const messageTextElement = loadingMessageElement.querySelector(".message__text");
+  registerSessionStreamDom(requestSessionId, loadingMessageElement, messageTextElement);
 
-  requestApiResponse(loadingMessageElement, requestModels);
+  requestApiResponse(loadingMessageElement, requestModels, requestSessionId);
 };
 
 // Copy message to clipboard
@@ -2943,9 +3239,8 @@ const copyMessageToClipboard = (copyButton) => {
 // Handle sending chat messages
 const handleOutgoingMessage = async () => {
   const inputText = messageForm.querySelector(".prompt__form-input").value.trim();
-  if ((inputText === "" && pendingAttachments.length === 0) || isGeneratingResponse) return;
+  if ((inputText === "" && pendingAttachments.length === 0) || isActiveSessionGenerating()) return;
 
-  isGeneratingResponse = true;
   shouldAutoScroll = true;
   closeSidebarDrawer();
 
@@ -2958,9 +3253,17 @@ const handleOutgoingMessage = async () => {
     chatSessions = [session, ...chatSessions];
     setActiveSession(session.id);
   }
+  const requestSessionId = activeSessionId;
+  setSessionGenerating(requestSessionId, true);
   updateActiveSessionTitle(getSessionTitleFromText(outgoingText));
   currentUserMessage = await buildMessageWithAttachments(inputText, activeAttachments);
-  appendMessageToActiveSession({ role: "user", content: outgoingText });
+  appendMessageToSession(requestSessionId, { role: "user", content: outgoingText });
+  appendMessageToSession(requestSessionId, {
+    role: "assistant",
+    content: "",
+    reasoning_content: "",
+    streaming: true,
+  });
   renderOutgoingMessage(outgoingText);
   scrollChatsToBottom("smooth");
 
@@ -2972,7 +3275,10 @@ const handleOutgoingMessage = async () => {
   themeRoot.style.setProperty("--prompt-expand-shift", "0px");
   document.body.classList.add("hide-header");
   updateChatBottomSafeSpace();
-  displayLoadingAnimation(selectedModelKeys, { deepSearch: deepSearchEnabled });
+  displayLoadingAnimation(selectedModelKeys, {
+    deepSearch: deepSearchEnabled,
+    requestSessionId,
+  });
 };
 
 const handleFeedbackAction = (buttonElement, actionType) => {
@@ -2997,7 +3303,7 @@ const handleFeedbackAction = (buttonElement, actionType) => {
 };
 
 const retryIncomingMessage = (buttonElement) => {
-  if (isGeneratingResponse) return;
+  if (isActiveSessionGenerating()) return;
 
   const incomingMessage = buttonElement.closest(".message--incoming");
   if (!incomingMessage) return;
@@ -3071,7 +3377,7 @@ voiceInputButton.addEventListener("click", () => {
 });
 
 attachButton?.addEventListener("click", () => {
-  if (isGeneratingResponse) return;
+  if (isActiveSessionGenerating()) return;
   attachMenu?.classList.toggle("hide");
 });
 
