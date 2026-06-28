@@ -850,53 +850,241 @@ body.hide-header .prompt{
     z-index: 1;
 }
 
+@property --glow-reveal-x{
+    syntax: "<percentage>";
+    inherits: false;
+    initial-value: -42%;
+}
+
+@property --glow-strength{
+    syntax: "<number>";
+    inherits: false;
+    initial-value: 0;
+}
+
 .thinking-radial-glow{
     position: fixed;
-    top: var(--navbar-safe-offset);
+    top: 0;
     left: var(--sidebar-current-width);
     width: calc(100% - var(--sidebar-current-width));
-    height: calc((100vh - var(--navbar-safe-offset)) * 0.5);
-    pointer-events: none;
+    height: calc(var(--navbar-safe-offset) + (100vh - var(--navbar-safe-offset)) * 0.5);
+    pointer-events: none !important;
     z-index: 0;
-    opacity: 0;
     overflow: hidden;
     transition: left 0.3s ease, width 0.3s ease;
-    -webkit-mask-image: linear-gradient(
-        to bottom,
-        rgba(0, 0, 0, 1) 0%,
-        rgba(0, 0, 0, 0.94) 58%,
-        rgba(0, 0, 0, 0.42) 84%,
-        rgba(0, 0, 0, 0) 100%
+    --glow-reveal-x: -42%;
+    --glow-strength: 0;
+    opacity: var(--glow-strength);
+    -webkit-mask-repeat: no-repeat;
+    mask-repeat: no-repeat;
+}
+
+.thinking-radial-glow.is-fading-in,
+.thinking-radial-glow.is-fading-out{
+    -webkit-mask-image: radial-gradient(
+        ellipse 118% 132% at var(--glow-reveal-x) 38%,
+        #000 0%,
+        #000 36%,
+        rgba(0, 0, 0, 0.72) 50%,
+        rgba(0, 0, 0, 0.28) 64%,
+        transparent 78%
     );
-    mask-image: linear-gradient(
-        to bottom,
-        rgba(0, 0, 0, 1) 0%,
-        rgba(0, 0, 0, 0.94) 58%,
-        rgba(0, 0, 0, 0.42) 84%,
-        rgba(0, 0, 0, 0) 100%
+    mask-image: radial-gradient(
+        ellipse 118% 132% at var(--glow-reveal-x) 38%,
+        #000 0%,
+        #000 36%,
+        rgba(0, 0, 0, 0.72) 50%,
+        rgba(0, 0, 0, 0.28) 64%,
+        transparent 78%
     );
 }
 
-.thinking-radial-glow__layer{
+.thinking-radial-glow.is-fading-in{
+    animation: thinking-glow-reveal-in 2.1s cubic-bezier(0.45, 0.05, 0.25, 1) forwards;
+}
+
+.thinking-radial-glow.is-fading-out{
+    animation: thinking-glow-reveal-out 2.5s cubic-bezier(0.45, 0.05, 0.25, 1) forwards;
+}
+
+.thinking-radial-glow.is-active:not(.is-fading-in):not(.is-fading-out){
+    --glow-reveal-x: 56%;
+    --glow-strength: 1;
+    opacity: 1;
+    -webkit-mask-image: none;
+    mask-image: none;
+}
+
+@keyframes thinking-glow-reveal-in{
+    0%{
+        --glow-reveal-x: -48%;
+        --glow-strength: 0;
+    }
+    100%{
+        --glow-reveal-x: 56%;
+        --glow-strength: 1;
+    }
+}
+
+@keyframes thinking-glow-reveal-out{
+    0%{
+        --glow-reveal-x: 56%;
+        --glow-strength: 1;
+    }
+    100%{
+        --glow-reveal-x: 152%;
+        --glow-strength: 0;
+    }
+}
+
+.thinking-radial-glow *,
+.thinking-radial-glow__vignette,
+.thinking-radial-glow__orb{
+    pointer-events: none !important;
+}
+
+.thinking-radial-glow__vignette{
     position: absolute;
-    inset: -8% -6%;
-    will-change: background, opacity;
+    inset: -12% -8%;
+    -webkit-mask-image: radial-gradient(
+        ellipse 140% 88% at 50% -8%,
+        #000 0%,
+        #000 38%,
+        rgba(0, 0, 0, 0.82) 58%,
+        rgba(0, 0, 0, 0.38) 76%,
+        transparent 100%
+    );
+    mask-image: radial-gradient(
+        ellipse 140% 88% at 50% -8%,
+        #000 0%,
+        #000 38%,
+        rgba(0, 0, 0, 0.82) 58%,
+        rgba(0, 0, 0, 0.38) 76%,
+        transparent 100%
+    );
 }
 
-.thinking-radial-glow__layer--secondary{
-    mix-blend-mode: screen;
-    opacity: 0.72;
+.thinking-radial-glow__orb{
+    position: absolute;
+    border-radius: 50%;
+    filter: blur(76px);
+    will-change: transform;
+    transform: translate3d(0, 0, 0);
+    backface-visibility: hidden;
 }
 
-.light_mode .thinking-radial-glow__layer--secondary{
-    mix-blend-mode: multiply;
-    opacity: 0.55;
+.thinking-radial-glow__orb--blue{
+    width: 52%;
+    height: 58%;
+    left: -6%;
+    top: -8%;
+    background: rgba(59, 130, 246, 0.52);
+    animation: thinking-orb-blue 19s ease-in-out infinite;
+}
+
+.thinking-radial-glow__orb--violet{
+    width: 48%;
+    height: 54%;
+    left: 28%;
+    top: -12%;
+    background: rgba(139, 92, 246, 0.46);
+    animation: thinking-orb-violet 22s ease-in-out infinite;
+}
+
+.thinking-radial-glow__orb--pink{
+    width: 44%;
+    height: 50%;
+    right: -4%;
+    top: 2%;
+    background: rgba(236, 72, 153, 0.4);
+    animation: thinking-orb-pink 17s ease-in-out infinite;
+}
+
+.thinking-radial-glow__orb--cyan{
+    width: 40%;
+    height: 46%;
+    left: 12%;
+    top: 18%;
+    background: rgba(6, 182, 212, 0.36);
+    animation: thinking-orb-cyan 24s ease-in-out infinite;
+}
+
+.thinking-radial-glow__orb--amber{
+    width: 38%;
+    height: 44%;
+    left: 46%;
+    top: 14%;
+    background: rgba(245, 158, 11, 0.32);
+    animation: thinking-orb-amber 20s ease-in-out infinite;
+}
+
+.thinking-radial-glow__orb--emerald{
+    width: 42%;
+    height: 48%;
+    right: 8%;
+    top: 22%;
+    background: rgba(16, 185, 129, 0.34);
+    animation: thinking-orb-emerald 21s ease-in-out infinite;
+}
+
+.light_mode .thinking-radial-glow__orb--blue{ background: rgba(59, 130, 246, 0.28); }
+.light_mode .thinking-radial-glow__orb--violet{ background: rgba(139, 92, 246, 0.24); }
+.light_mode .thinking-radial-glow__orb--pink{ background: rgba(236, 72, 153, 0.2); }
+.light_mode .thinking-radial-glow__orb--cyan{ background: rgba(6, 182, 212, 0.18); }
+.light_mode .thinking-radial-glow__orb--amber{ background: rgba(245, 158, 11, 0.16); }
+.light_mode .thinking-radial-glow__orb--emerald{ background: rgba(16, 185, 129, 0.17); }
+
+@keyframes thinking-orb-blue{
+    0%, 100%{ transform: translate3d(0, 0, 0) scale(1); }
+    33%{ transform: translate3d(8%, 6%, 0) scale(1.08); }
+    66%{ transform: translate3d(4%, -4%, 0) scale(0.96); }
+}
+
+@keyframes thinking-orb-violet{
+    0%, 100%{ transform: translate3d(0, 0, 0) scale(1); }
+    40%{ transform: translate3d(-6%, 8%, 0) scale(1.06); }
+    70%{ transform: translate3d(5%, 3%, 0) scale(0.94); }
+}
+
+@keyframes thinking-orb-pink{
+    0%, 100%{ transform: translate3d(0, 0, 0) scale(1); }
+    35%{ transform: translate3d(-8%, 4%, 0) scale(1.1); }
+    68%{ transform: translate3d(-3%, -5%, 0) scale(0.95); }
+}
+
+@keyframes thinking-orb-cyan{
+    0%, 100%{ transform: translate3d(0, 0, 0) scale(1); }
+    45%{ transform: translate3d(10%, -3%, 0) scale(1.07); }
+    75%{ transform: translate3d(6%, 7%, 0) scale(0.97); }
+}
+
+@keyframes thinking-orb-amber{
+    0%, 100%{ transform: translate3d(0, 0, 0) scale(1); }
+    38%{ transform: translate3d(-5%, -6%, 0) scale(1.05); }
+    72%{ transform: translate3d(7%, 2%, 0) scale(0.98); }
+}
+
+@keyframes thinking-orb-emerald{
+    0%, 100%{ transform: translate3d(0, 0, 0) scale(1); }
+    42%{ transform: translate3d(-7%, 5%, 0) scale(1.09); }
+    78%{ transform: translate3d(4%, -4%, 0) scale(0.96); }
 }
 
 @media (max-width: 680px){
     .thinking-radial-glow{
         left: 0;
         width: 100%;
+    }
+}
+
+@media (prefers-reduced-motion: reduce){
+    .thinking-radial-glow.is-fading-in,
+    .thinking-radial-glow.is-fading-out{
+        animation: none;
+    }
+
+    .thinking-radial-glow__orb{
+        animation: none !important;
     }
 }
 
