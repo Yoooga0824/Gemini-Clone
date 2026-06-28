@@ -22,13 +22,15 @@ export function createThinkingRadialGlow({ chatContainer } = {}) {
   `;
   document.body.appendChild(overlay);
 
+  const FLOW_SPEED = 0.0034;
+
   const orbs = [
-    { el: overlay.querySelector(".thinking-radial-glow__orb--blue"), ax: 22, ay: 16, sx: 0, sy: 0, speed: 0.00042, phase: 0.0 },
-    { el: overlay.querySelector(".thinking-radial-glow__orb--violet"), ax: 20, ay: 18, sx: 4, sy: -2, speed: 0.00036, phase: 1.4 },
-    { el: overlay.querySelector(".thinking-radial-glow__orb--pink"), ax: 24, ay: 14, sx: -3, sy: 3, speed: 0.00048, phase: 2.6 },
-    { el: overlay.querySelector(".thinking-radial-glow__orb--cyan"), ax: 18, ay: 20, sx: 2, sy: 5, speed: 0.00033, phase: 0.8 },
-    { el: overlay.querySelector(".thinking-radial-glow__orb--amber"), ax: 16, ay: 15, sx: -2, sy: -4, speed: 0.00039, phase: 3.2 },
-    { el: overlay.querySelector(".thinking-radial-glow__orb--emerald"), ax: 21, ay: 17, sx: 3, sy: 2, speed: 0.00044, phase: 4.1 },
+    { el: overlay.querySelector(".thinking-radial-glow__orb--blue"), ax: 32, ay: 24, sx: 0, sy: 0, speed: FLOW_SPEED * 1.05, phase: 0.0 },
+    { el: overlay.querySelector(".thinking-radial-glow__orb--violet"), ax: 30, ay: 26, sx: 4, sy: -2, speed: FLOW_SPEED * 0.9, phase: 1.4 },
+    { el: overlay.querySelector(".thinking-radial-glow__orb--pink"), ax: 34, ay: 22, sx: -3, sy: 3, speed: FLOW_SPEED * 1.2, phase: 2.6 },
+    { el: overlay.querySelector(".thinking-radial-glow__orb--cyan"), ax: 28, ay: 28, sx: 2, sy: 5, speed: FLOW_SPEED * 0.82, phase: 0.8 },
+    { el: overlay.querySelector(".thinking-radial-glow__orb--amber"), ax: 26, ay: 23, sx: -2, sy: -4, speed: FLOW_SPEED * 0.98, phase: 3.2 },
+    { el: overlay.querySelector(".thinking-radial-glow__orb--emerald"), ax: 31, ay: 25, sx: 3, sy: 2, speed: FLOW_SPEED * 1.1, phase: 4.1 },
   ];
 
   let flowRafId = 0;
@@ -108,22 +110,34 @@ export function createThinkingRadialGlow({ chatContainer } = {}) {
     syncFlowMotion();
   };
 
+  const finishFadeIn = () => {
+    if (!targetActive) {
+      hideInstant();
+      return;
+    }
+    overlay.classList.add("is-active");
+    overlay.classList.remove("is-fading-in");
+    syncFlowMotion();
+  };
+
+  const finishFadeOut = () => {
+    overlay.classList.remove("is-fading-out");
+    if (targetActive) {
+      beginFadeIn();
+      return;
+    }
+    overlay.classList.remove("is-active");
+    syncFlowMotion();
+  };
+
   overlay.addEventListener("animationend", (event) => {
     if (event.target !== overlay) return;
     if (overlay.classList.contains("is-fading-in")) {
-      clearFadeClasses();
-      if (targetActive) {
-        overlay.classList.add("is-active");
-        syncFlowMotion();
-      } else {
-        hideInstant();
-      }
+      finishFadeIn();
       return;
     }
     if (overlay.classList.contains("is-fading-out")) {
-      clearFadeClasses();
-      if (targetActive) beginFadeIn();
-      else hideInstant();
+      finishFadeOut();
     }
   });
 

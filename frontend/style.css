@@ -115,6 +115,9 @@
     --deep-search-active-text: #cfe6ff;
     --deep-search-active-border: rgba(96, 165, 250, 0.55);
     --thinking-glow-z: 1310;
+    --thinking-glow-layer-opacity: 0.5;
+    --thinking-glow-aurora-duration: 4s;
+    --thinking-glow-flow-duration: 3s;
 }
 
 .light_mode{
@@ -911,8 +914,22 @@ body.hide-header .prompt{
     --glow-reveal-x: 56%;
     --glow-strength: 1;
     opacity: 1;
-    -webkit-mask-image: none;
-    mask-image: none;
+    -webkit-mask-image: radial-gradient(
+        ellipse 118% 132% at 56% 38%,
+        #000 0%,
+        #000 36%,
+        rgba(0, 0, 0, 0.72) 50%,
+        rgba(0, 0, 0, 0.28) 64%,
+        transparent 78%
+    );
+    mask-image: radial-gradient(
+        ellipse 118% 132% at 56% 38%,
+        #000 0%,
+        #000 36%,
+        rgba(0, 0, 0, 0.72) 50%,
+        rgba(0, 0, 0, 0.28) 64%,
+        transparent 78%
+    );
 }
 
 @keyframes thinking-glow-reveal-in{
@@ -948,6 +965,7 @@ body.hide-header .prompt{
 .thinking-radial-glow__vignette{
     position: absolute;
     inset: -12% -8%;
+    opacity: var(--thinking-glow-layer-opacity);
     -webkit-mask-image: radial-gradient(
         ellipse 140% 88% at 50% -8%,
         #000 0%,
@@ -978,42 +996,42 @@ body.hide-header .prompt{
     inset: -45%;
     background: conic-gradient(
         from 0deg at 50% 42%,
-        rgba(59, 130, 246, 0.34) 0deg,
-        rgba(139, 92, 246, 0.38) 52deg,
-        rgba(236, 72, 153, 0.3) 108deg,
-        rgba(6, 182, 212, 0.32) 168deg,
-        rgba(245, 158, 11, 0.26) 228deg,
-        rgba(16, 185, 129, 0.28) 288deg,
-        rgba(59, 130, 246, 0.34) 360deg
+        rgba(59, 130, 246, 0.17) 0deg,
+        rgba(139, 92, 246, 0.19) 52deg,
+        rgba(236, 72, 153, 0.15) 108deg,
+        rgba(6, 182, 212, 0.16) 168deg,
+        rgba(245, 158, 11, 0.13) 228deg,
+        rgba(16, 185, 129, 0.14) 288deg,
+        rgba(59, 130, 246, 0.17) 360deg
     );
     filter: blur(64px);
-    animation: thinking-aurora-spin 24s linear infinite;
+    animation: thinking-aurora-spin var(--thinking-glow-aurora-duration) linear infinite;
 }
 
 .thinking-radial-glow__flow{
     inset: -35%;
     background:
-        radial-gradient(circle at 18% 28%, rgba(59, 130, 246, 0.36) 0%, transparent 52%),
-        radial-gradient(circle at 78% 18%, rgba(168, 85, 247, 0.32) 0%, transparent 50%),
-        radial-gradient(circle at 52% 62%, rgba(6, 182, 212, 0.28) 0%, transparent 54%),
-        radial-gradient(circle at 32% 72%, rgba(249, 115, 22, 0.24) 0%, transparent 48%),
-        radial-gradient(circle at 86% 58%, rgba(16, 185, 129, 0.26) 0%, transparent 50%);
-    background-size: 180% 180%;
+        radial-gradient(circle at 18% 28%, rgba(59, 130, 246, 0.18) 0%, transparent 52%),
+        radial-gradient(circle at 78% 18%, rgba(168, 85, 247, 0.16) 0%, transparent 50%),
+        radial-gradient(circle at 52% 62%, rgba(6, 182, 212, 0.14) 0%, transparent 54%),
+        radial-gradient(circle at 32% 72%, rgba(249, 115, 22, 0.12) 0%, transparent 48%),
+        radial-gradient(circle at 86% 58%, rgba(16, 185, 129, 0.13) 0%, transparent 50%);
+    background-size: 220% 220%;
     filter: blur(52px);
-    animation: thinking-flow-drift 14s ease-in-out infinite;
+    animation: thinking-flow-drift var(--thinking-glow-flow-duration) linear infinite;
     will-change: background-position, transform;
 }
 
 .light_mode .thinking-radial-glow__aurora{
     background: conic-gradient(
         from 0deg at 50% 42%,
-        rgba(59, 130, 246, 0.18) 0deg,
-        rgba(139, 92, 246, 0.2) 52deg,
-        rgba(236, 72, 153, 0.16) 108deg,
-        rgba(6, 182, 212, 0.17) 168deg,
-        rgba(245, 158, 11, 0.14) 228deg,
-        rgba(16, 185, 129, 0.15) 288deg,
-        rgba(59, 130, 246, 0.18) 360deg
+        rgba(59, 130, 246, 0.09) 0deg,
+        rgba(139, 92, 246, 0.1) 52deg,
+        rgba(236, 72, 153, 0.08) 108deg,
+        rgba(6, 182, 212, 0.085) 168deg,
+        rgba(245, 158, 11, 0.07) 228deg,
+        rgba(16, 185, 129, 0.075) 288deg,
+        rgba(59, 130, 246, 0.09) 360deg
     );
 }
 
@@ -1023,21 +1041,25 @@ body.hide-header .prompt{
 }
 
 @keyframes thinking-flow-drift{
-    0%, 100%{
+    0%{
         background-position: 0% 0%, 100% 0%, 50% 100%, 0% 100%, 100% 100%;
-        transform: translate3d(0, 0, 0) scale(1);
+        transform: translate3d(0, 0, 0) rotate(0deg) scale(1);
     }
     25%{
-        background-position: 90% 15%, 5% 55%, 85% 25%, 35% 85%, 75% 5%;
-        transform: translate3d(5%, -3%, 0) scale(1.08);
+        background-position: 100% 20%, 0% 60%, 100% 10%, 40% 90%, 80% 0%;
+        transform: translate3d(8%, -5%, 0) rotate(3deg) scale(1.1);
     }
     50%{
-        background-position: 50% 90%, 95% 35%, 15% 15%, 90% 45%, 25% 75%;
-        transform: translate3d(-3%, 4%, 0) scale(0.94);
+        background-position: 50% 100%, 100% 30%, 0% 0%, 100% 50%, 0% 80%;
+        transform: translate3d(-6%, 6%, 0) rotate(-2deg) scale(0.92);
     }
     75%{
-        background-position: 10% 40%, 70% 80%, 60% 10%, 20% 60%, 80% 30%;
-        transform: translate3d(4%, 2%, 0) scale(1.05);
+        background-position: 0% 50%, 80% 90%, 70% 0%, 10% 70%, 90% 20%;
+        transform: translate3d(6%, 3%, 0) rotate(2deg) scale(1.08);
+    }
+    100%{
+        background-position: 0% 0%, 100% 0%, 50% 100%, 0% 100%, 100% 100%;
+        transform: translate3d(0, 0, 0) rotate(0deg) scale(1);
     }
 }
 
@@ -1060,7 +1082,7 @@ body.hide-header .prompt{
     height: 58%;
     left: -6%;
     top: -8%;
-    background: rgba(59, 130, 246, 0.52);
+    background: rgba(59, 130, 246, 0.25);
 }
 
 .thinking-radial-glow__orb--violet{
@@ -1068,7 +1090,7 @@ body.hide-header .prompt{
     height: 54%;
     left: 28%;
     top: -12%;
-    background: rgba(139, 92, 246, 0.46);
+    background: rgba(139, 92, 246, 0.23);
 }
 
 .thinking-radial-glow__orb--pink{
@@ -1076,7 +1098,7 @@ body.hide-header .prompt{
     height: 50%;
     right: -4%;
     top: 2%;
-    background: rgba(236, 72, 153, 0.4);
+    background: rgba(236, 72, 153, 0.2);
 }
 
 .thinking-radial-glow__orb--cyan{
@@ -1084,7 +1106,7 @@ body.hide-header .prompt{
     height: 46%;
     left: 12%;
     top: 18%;
-    background: rgba(6, 182, 212, 0.36);
+    background: rgba(6, 182, 212, 0.18);
 }
 
 .thinking-radial-glow__orb--amber{
@@ -1092,7 +1114,7 @@ body.hide-header .prompt{
     height: 44%;
     left: 46%;
     top: 14%;
-    background: rgba(245, 158, 11, 0.32);
+    background: rgba(245, 158, 11, 0.16);
 }
 
 .thinking-radial-glow__orb--emerald{
@@ -1100,15 +1122,15 @@ body.hide-header .prompt{
     height: 48%;
     right: 8%;
     top: 22%;
-    background: rgba(16, 185, 129, 0.34);
+    background: rgba(16, 185, 129, 0.17);
 }
 
-.light_mode .thinking-radial-glow__orb--blue{ background: rgba(59, 130, 246, 0.28); }
-.light_mode .thinking-radial-glow__orb--violet{ background: rgba(139, 92, 246, 0.24); }
-.light_mode .thinking-radial-glow__orb--pink{ background: rgba(236, 72, 153, 0.2); }
-.light_mode .thinking-radial-glow__orb--cyan{ background: rgba(6, 182, 212, 0.18); }
-.light_mode .thinking-radial-glow__orb--amber{ background: rgba(245, 158, 11, 0.16); }
-.light_mode .thinking-radial-glow__orb--emerald{ background: rgba(16, 185, 129, 0.17); }
+.light_mode .thinking-radial-glow__orb--blue{ background: rgba(59, 130, 246, 0.14); }
+.light_mode .thinking-radial-glow__orb--violet{ background: rgba(139, 92, 246, 0.12); }
+.light_mode .thinking-radial-glow__orb--pink{ background: rgba(236, 72, 153, 0.1); }
+.light_mode .thinking-radial-glow__orb--cyan{ background: rgba(6, 182, 212, 0.09); }
+.light_mode .thinking-radial-glow__orb--amber{ background: rgba(245, 158, 11, 0.08); }
+.light_mode .thinking-radial-glow__orb--emerald{ background: rgba(16, 185, 129, 0.085); }
 
 @media (prefers-reduced-motion: reduce){
     .thinking-radial-glow.is-fading-in,
