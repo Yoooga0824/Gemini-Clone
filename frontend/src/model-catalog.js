@@ -7,8 +7,9 @@ export const MODEL_CATALOG = [
   { key: "kimi", label: "Kimi", icon: "assets/Kimi.png" },
   { key: "qwen", label: "千问", icon: "assets/Qwen.png" },
   { key: "glm", label: "智谱GLM", icon: "assets/GLM.png" },
-  { key: "mimo", label: "Mimo", icon: "assets/Mimo.png" },
 ];
+
+export const DEFAULT_MODEL_KEY = MODEL_CATALOG[0]?.key || "deepseek";
 
 export const MODEL_LABELS = MODEL_CATALOG.reduce((labels, item) => {
   labels[item.key] = item.label;
@@ -34,6 +35,6 @@ export const normalizeModelSelection = (inputModels = []) => {
     seen.add(key);
     normalized.push(key);
   });
-  if (normalized.length === 0) return ["mimo"];
+  if (normalized.length === 0) return [DEFAULT_MODEL_KEY];
   return normalized.slice(0, MAX_SELECTED_MODELS);
 };

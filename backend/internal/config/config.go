@@ -75,13 +75,6 @@ var providerCatalog = []ProviderBlueprint{
 		DefaultModel:   "qwen-plus",
 	},
 	{
-		Key:            "mimo",
-		EnvPrefix:      "MIMO",
-		DefaultBaseURL: "",
-		DefaultPath:    "/v1/chat/completions",
-		DefaultModel:   "mimo-v2.5-pro",
-	},
-	{
 		Key:            "glm",
 		EnvPrefix:      "GLM",
 		DefaultBaseURL: "https://open.bigmodel.cn/api/paas",

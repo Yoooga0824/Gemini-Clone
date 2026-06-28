@@ -72,7 +72,7 @@ let usageChartDataCache = {
   recentSummary: null,
   totalSummary: null,
 };
-let selectedModelKeys = ["mimo"];
+let selectedModelKeys = [DEFAULT_MODEL_KEY];
 let modelPickerHideTimer = null;
 let deepSearchEnabled = false;
 
@@ -85,6 +85,7 @@ const FILE_ACCEPT =
 
 import config from "./config.js";
 import {
+  DEFAULT_MODEL_KEY,
   MAX_SELECTED_MODELS,
   MODEL_CATALOG,
   MODEL_LABELS,
@@ -1238,7 +1239,7 @@ const extractAssistantModelResponsesFromSession = (serverSession = null, fallbac
 
   const normalized = candidateResponses
     .map((item, index) => ({
-      model: String(item?.model || fallbackModels[index] || fallbackModels[0] || "mimo")
+      model: String(item?.model || fallbackModels[index] || fallbackModels[0] || DEFAULT_MODEL_KEY)
         .trim()
         .toLowerCase(),
       content: item?.content || "",
@@ -1251,7 +1252,7 @@ const extractAssistantModelResponsesFromSession = (serverSession = null, fallbac
   if (!latestAssistantMessage) return [];
 
   const fallbackSingle = {
-    model: String(latestAssistantMessage?.model || fallbackModels[0] || "mimo")
+    model: String(latestAssistantMessage?.model || fallbackModels[0] || DEFAULT_MODEL_KEY)
       .trim()
       .toLowerCase(),
     content: latestAssistantMessage?.content || "",
@@ -1341,7 +1342,7 @@ const pickModelResponse = (responses = [], preferredModel = "") => {
     if (matched) return matched;
   }
   return responses[0] || {
-    model: "mimo",
+    model: DEFAULT_MODEL_KEY,
     content: "",
     reasoning_content: "",
   };
@@ -1350,7 +1351,7 @@ const pickModelResponse = (responses = [], preferredModel = "") => {
 const normalizeModelResponses = (responses = [], fallbackModels = []) =>
   (responses || [])
     .map((item, index) => ({
-      model: String(item?.model || fallbackModels[index] || fallbackModels[0] || "mimo")
+      model: String(item?.model || fallbackModels[index] || fallbackModels[0] || DEFAULT_MODEL_KEY)
         .trim()
         .toLowerCase(),
       content: item?.content || "",
@@ -2182,7 +2183,7 @@ const bindModelPickerEvents = () => {
     } else {
       next = next.filter((item) => item !== modelKey);
       if (next.length === 0) {
-        next = ["mimo"];
+        next = [DEFAULT_MODEL_KEY];
       }
     }
     setSelectedModels(next);
@@ -2225,7 +2226,7 @@ const loadSavedChatHistory = () => {
     const rawModels = JSON.parse(localStorage.getItem(MODEL_SELECTION_STORAGE_KEY) || "[]");
     setSelectedModels(rawModels);
   } catch {
-    setSelectedModels(["mimo"]);
+    setSelectedModels([DEFAULT_MODEL_KEY]);
   }
   setDeepSearchEnabled(localStorage.getItem(DEEP_SEARCH_STORAGE_KEY) === "true");
   currentUser = authToken ? getCachedUserProfile() : null;
@@ -2697,7 +2698,7 @@ const consumeAssistantEventStreamMulti = async (
       { model: modelKey, content: "", reasoning_content: "", error: "", done: false },
     ])
   );
-  let activeModel = modelOrder[0] || "mimo";
+  let activeModel = modelOrder[0] || DEFAULT_MODEL_KEY;
   let tabsRenderKey = "";
   let streamStarted = false;
   let streamCompleted = false;
@@ -2886,7 +2887,7 @@ const consumeAssistantEventStreamMulti = async (
       }
 
       if (eventData.type === "delta") {
-        const deltaModel = String(eventData.model || modelOrder[0] || activeModel || "mimo")
+        const deltaModel = String(eventData.model || modelOrder[0] || activeModel || DEFAULT_MODEL_KEY)
           .trim()
           .toLowerCase();
         const state = ensureTrackState(deltaModel);
@@ -3117,7 +3118,7 @@ const requestApiResponse = async (incomingMessageElement, requestedModels = [], 
           });
         } else {
           finalizeStreamingAssistantInSession(boundSessionId, {
-            model: normalizedRequestedModels[0] || "mimo",
+            model: normalizedRequestedModels[0] || DEFAULT_MODEL_KEY,
             content: "",
             reasoning_content: "",
           });
@@ -3139,7 +3140,7 @@ const requestApiResponse = async (incomingMessageElement, requestedModels = [], 
           normalizedRequestedModels
         );
         const single = streamModelResponses[0] || {
-          model: normalizedRequestedModels[0] || "mimo",
+          model: normalizedRequestedModels[0] || DEFAULT_MODEL_KEY,
           content: streamResult?.content || "",
           reasoning_content: streamResult?.reasoning || "",
         };
@@ -3164,7 +3165,7 @@ const requestApiResponse = async (incomingMessageElement, requestedModels = [], 
         const responseMessage = choice?.message || {};
         const parsed = extractReasoningAndContentFromMessage(responseMessage);
         return {
-          model: String(responseMessage?.model || normalizedRequestedModels[index] || normalizedRequestedModels[0] || "mimo")
+          model: String(responseMessage?.model || normalizedRequestedModels[index] || normalizedRequestedModels[0] || DEFAULT_MODEL_KEY)
             .trim()
             .toLowerCase(),
           content: parsed.content || "",

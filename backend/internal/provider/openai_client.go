@@ -115,6 +115,31 @@ type chatToolCallDetail struct {
 	Arguments string `json:"arguments"`
 }
 
+// upstreamAPIError accepts both OpenAI-style {"message":"..."} and plain string
+// error values returned by some providers (e.g. Kimi).
+type upstreamAPIError struct {
+	Message string
+}
+
+func (e *upstreamAPIError) UnmarshalJSON(data []byte) error {
+	if string(data) == "null" {
+		return nil
+	}
+	var asString string
+	if err := json.Unmarshal(data, &asString); err == nil {
+		e.Message = asString
+		return nil
+	}
+	var asObject struct {
+		Message string `json:"message"`
+	}
+	if err := json.Unmarshal(data, &asObject); err != nil {
+		return err
+	}
+	e.Message = asObject.Message
+	return nil
+}
+
 type chatResponse struct {
 	Choices []struct {
 		Message chatMessage `json:"message"`
@@ -124,9 +149,7 @@ type chatResponse struct {
 		CompletionTokens int `json:"completion_tokens"`
 		TotalTokens      int `json:"total_tokens"`
 	} `json:"usage,omitempty"`
-	Error *struct {
-		Message string `json:"message"`
-	} `json:"error,omitempty"`
+	Error *upstreamAPIError `json:"error,omitempty"`
 }
 
 type chatStreamChunk struct {
@@ -144,9 +167,7 @@ type chatStreamChunk struct {
 		CompletionTokens int `json:"completion_tokens"`
 		TotalTokens      int `json:"total_tokens"`
 	} `json:"usage,omitempty"`
-	Error *struct {
-		Message string `json:"message"`
-	} `json:"error,omitempty"`
+	Error *upstreamAPIError `json:"error,omitempty"`
 }
 
 var thinkTagPattern = regexp.MustCompile(`(?s)<think>\s*(.*?)\s*</think>`)
