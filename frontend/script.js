@@ -1989,7 +1989,8 @@ const renderUsageChart = () => {
 
 const bindModalEvents = () => {
   document.querySelectorAll("[data-close-modal]").forEach((button) => {
-    button.addEventListener("click", () => {
+    button.addEventListener("click", (event) => {
+      event.stopPropagation();
       const modalId = button.getAttribute("data-close-modal");
       if (!modalId) return;
       closeModal(document.getElementById(modalId));
