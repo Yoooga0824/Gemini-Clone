@@ -1716,7 +1716,7 @@ body.sidebar-collapsed .sidebar__brand:hover .sidebar__expand-btn{
 
 .settings-modal{
     display: grid;
-    grid-template-columns: 294px minmax(0, 1fr);
+    grid-template-columns: 196px minmax(0, 1fr);
     min-height: 630px;
     max-height: min(90vh, 960px);
 }

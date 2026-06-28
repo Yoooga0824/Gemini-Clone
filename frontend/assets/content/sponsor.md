@@ -1,4 +1,4 @@
-> ⚡ 本项目完全免费并开源在`https://github.com/Yoooga0824`
+> ⚡ 本项目完全免费并开源 https://github.com/Yoooga0824
 
 # ❤️ 支持项目 / Support This Project
 
