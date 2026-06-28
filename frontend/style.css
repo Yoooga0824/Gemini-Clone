@@ -116,8 +116,8 @@
     --deep-search-active-border: rgba(96, 165, 250, 0.55);
     --thinking-glow-z: 1310;
     --thinking-glow-layer-opacity: 0.5;
-    --thinking-glow-aurora-duration: 4s;
-    --thinking-glow-flow-duration: 3s;
+    --thinking-glow-aurora-duration: 8s;
+    --thinking-glow-flow-duration: 6s;
 }
 
 .light_mode{

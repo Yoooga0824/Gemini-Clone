@@ -22,7 +22,7 @@ export function createThinkingRadialGlow({ chatContainer } = {}) {
   `;
   document.body.appendChild(overlay);
 
-  const FLOW_SPEED = 0.0034;
+  const FLOW_SPEED = 0.0017;
 
   const orbs = [
     { el: overlay.querySelector(".thinking-radial-glow__orb--blue"), ax: 32, ay: 24, sx: 0, sy: 0, speed: FLOW_SPEED * 1.05, phase: 0.0 },
