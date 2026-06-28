@@ -114,6 +114,7 @@
     --deep-search-active-bg: rgba(96, 165, 250, 0.22);
     --deep-search-active-text: #cfe6ff;
     --deep-search-active-border: rgba(96, 165, 250, 0.55);
+    --thinking-glow-z: 1310;
 }
 
 .light_mode{
@@ -865,13 +866,12 @@ body.hide-header .prompt{
 .thinking-radial-glow{
     position: fixed;
     top: 0;
-    left: var(--sidebar-current-width);
-    width: calc(100% - var(--sidebar-current-width));
+    left: 0;
+    width: 100%;
     height: calc(var(--navbar-safe-offset) + (100vh - var(--navbar-safe-offset)) * 0.5);
     pointer-events: none !important;
-    z-index: 0;
+    z-index: var(--thinking-glow-z);
     overflow: hidden;
-    transition: left 0.3s ease, width 0.3s ease;
     --glow-reveal-x: -42%;
     --glow-strength: 0;
     opacity: var(--glow-strength);
@@ -939,6 +939,8 @@ body.hide-header .prompt{
 
 .thinking-radial-glow *,
 .thinking-radial-glow__vignette,
+.thinking-radial-glow__aurora,
+.thinking-radial-glow__flow,
 .thinking-radial-glow__orb{
     pointer-events: none !important;
 }
@@ -1107,13 +1109,6 @@ body.hide-header .prompt{
 .light_mode .thinking-radial-glow__orb--cyan{ background: rgba(6, 182, 212, 0.18); }
 .light_mode .thinking-radial-glow__orb--amber{ background: rgba(245, 158, 11, 0.16); }
 .light_mode .thinking-radial-glow__orb--emerald{ background: rgba(16, 185, 129, 0.17); }
-
-@media (max-width: 680px){
-    .thinking-radial-glow{
-        left: 0;
-        width: 100%;
-    }
-}
 
 @media (prefers-reduced-motion: reduce){
     .thinking-radial-glow.is-fading-in,
