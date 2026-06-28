@@ -23,7 +23,6 @@ const feedbackCards = document.getElementById("feedbackCards");
 const feedbackList = document.getElementById("feedbackList");
 const feedbackDetail = document.getElementById("feedbackDetail");
 const backToChatBtn = document.getElementById("backToChatBtn");
-const adminLogoutBtn = document.getElementById("adminLogoutBtn");
 
 let authToken = localStorage.getItem(AUTH_TOKEN_STORAGE_KEY) || "";
 let currentUser = null;
@@ -838,12 +837,6 @@ const bindEvents = () => {
   });
 
   backToChatBtn?.addEventListener("click", () => {
-    goChatPage();
-  });
-
-  adminLogoutBtn?.addEventListener("click", () => {
-    localStorage.removeItem(AUTH_TOKEN_STORAGE_KEY);
-    localStorage.removeItem(USER_PROFILE_STORAGE_KEY);
     goChatPage();
   });
 };
