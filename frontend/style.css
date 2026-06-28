@@ -964,6 +964,86 @@ body.hide-header .prompt{
     );
 }
 
+.thinking-radial-glow__aurora,
+.thinking-radial-glow__flow{
+    position: absolute;
+    pointer-events: none;
+    transform: translate3d(0, 0, 0);
+    backface-visibility: hidden;
+}
+
+.thinking-radial-glow__aurora{
+    inset: -45%;
+    background: conic-gradient(
+        from 0deg at 50% 42%,
+        rgba(59, 130, 246, 0.34) 0deg,
+        rgba(139, 92, 246, 0.38) 52deg,
+        rgba(236, 72, 153, 0.3) 108deg,
+        rgba(6, 182, 212, 0.32) 168deg,
+        rgba(245, 158, 11, 0.26) 228deg,
+        rgba(16, 185, 129, 0.28) 288deg,
+        rgba(59, 130, 246, 0.34) 360deg
+    );
+    filter: blur(64px);
+    animation: thinking-aurora-spin 24s linear infinite;
+}
+
+.thinking-radial-glow__flow{
+    inset: -35%;
+    background:
+        radial-gradient(circle at 18% 28%, rgba(59, 130, 246, 0.36) 0%, transparent 52%),
+        radial-gradient(circle at 78% 18%, rgba(168, 85, 247, 0.32) 0%, transparent 50%),
+        radial-gradient(circle at 52% 62%, rgba(6, 182, 212, 0.28) 0%, transparent 54%),
+        radial-gradient(circle at 32% 72%, rgba(249, 115, 22, 0.24) 0%, transparent 48%),
+        radial-gradient(circle at 86% 58%, rgba(16, 185, 129, 0.26) 0%, transparent 50%);
+    background-size: 180% 180%;
+    filter: blur(52px);
+    animation: thinking-flow-drift 14s ease-in-out infinite;
+    will-change: background-position, transform;
+}
+
+.light_mode .thinking-radial-glow__aurora{
+    background: conic-gradient(
+        from 0deg at 50% 42%,
+        rgba(59, 130, 246, 0.18) 0deg,
+        rgba(139, 92, 246, 0.2) 52deg,
+        rgba(236, 72, 153, 0.16) 108deg,
+        rgba(6, 182, 212, 0.17) 168deg,
+        rgba(245, 158, 11, 0.14) 228deg,
+        rgba(16, 185, 129, 0.15) 288deg,
+        rgba(59, 130, 246, 0.18) 360deg
+    );
+}
+
+@keyframes thinking-aurora-spin{
+    from{ transform: translate3d(0, 0, 0) rotate(0deg); }
+    to{ transform: translate3d(0, 0, 0) rotate(360deg); }
+}
+
+@keyframes thinking-flow-drift{
+    0%, 100%{
+        background-position: 0% 0%, 100% 0%, 50% 100%, 0% 100%, 100% 100%;
+        transform: translate3d(0, 0, 0) scale(1);
+    }
+    25%{
+        background-position: 90% 15%, 5% 55%, 85% 25%, 35% 85%, 75% 5%;
+        transform: translate3d(5%, -3%, 0) scale(1.08);
+    }
+    50%{
+        background-position: 50% 90%, 95% 35%, 15% 15%, 90% 45%, 25% 75%;
+        transform: translate3d(-3%, 4%, 0) scale(0.94);
+    }
+    75%{
+        background-position: 10% 40%, 70% 80%, 60% 10%, 20% 60%, 80% 30%;
+        transform: translate3d(4%, 2%, 0) scale(1.05);
+    }
+}
+
+.thinking-radial-glow:not(.is-active):not(.is-fading-in):not(.is-fading-out) .thinking-radial-glow__aurora,
+.thinking-radial-glow:not(.is-active):not(.is-fading-in):not(.is-fading-out) .thinking-radial-glow__flow{
+    animation-play-state: paused;
+}
+
 .thinking-radial-glow__orb{
     position: absolute;
     border-radius: 50%;
@@ -979,7 +1059,6 @@ body.hide-header .prompt{
     left: -6%;
     top: -8%;
     background: rgba(59, 130, 246, 0.52);
-    animation: thinking-orb-blue 19s ease-in-out infinite;
 }
 
 .thinking-radial-glow__orb--violet{
@@ -988,7 +1067,6 @@ body.hide-header .prompt{
     left: 28%;
     top: -12%;
     background: rgba(139, 92, 246, 0.46);
-    animation: thinking-orb-violet 22s ease-in-out infinite;
 }
 
 .thinking-radial-glow__orb--pink{
@@ -997,7 +1075,6 @@ body.hide-header .prompt{
     right: -4%;
     top: 2%;
     background: rgba(236, 72, 153, 0.4);
-    animation: thinking-orb-pink 17s ease-in-out infinite;
 }
 
 .thinking-radial-glow__orb--cyan{
@@ -1006,7 +1083,6 @@ body.hide-header .prompt{
     left: 12%;
     top: 18%;
     background: rgba(6, 182, 212, 0.36);
-    animation: thinking-orb-cyan 24s ease-in-out infinite;
 }
 
 .thinking-radial-glow__orb--amber{
@@ -1015,7 +1091,6 @@ body.hide-header .prompt{
     left: 46%;
     top: 14%;
     background: rgba(245, 158, 11, 0.32);
-    animation: thinking-orb-amber 20s ease-in-out infinite;
 }
 
 .thinking-radial-glow__orb--emerald{
@@ -1024,7 +1099,6 @@ body.hide-header .prompt{
     right: 8%;
     top: 22%;
     background: rgba(16, 185, 129, 0.34);
-    animation: thinking-orb-emerald 21s ease-in-out infinite;
 }
 
 .light_mode .thinking-radial-glow__orb--blue{ background: rgba(59, 130, 246, 0.28); }
@@ -1033,42 +1107,6 @@ body.hide-header .prompt{
 .light_mode .thinking-radial-glow__orb--cyan{ background: rgba(6, 182, 212, 0.18); }
 .light_mode .thinking-radial-glow__orb--amber{ background: rgba(245, 158, 11, 0.16); }
 .light_mode .thinking-radial-glow__orb--emerald{ background: rgba(16, 185, 129, 0.17); }
-
-@keyframes thinking-orb-blue{
-    0%, 100%{ transform: translate3d(0, 0, 0) scale(1); }
-    33%{ transform: translate3d(8%, 6%, 0) scale(1.08); }
-    66%{ transform: translate3d(4%, -4%, 0) scale(0.96); }
-}
-
-@keyframes thinking-orb-violet{
-    0%, 100%{ transform: translate3d(0, 0, 0) scale(1); }
-    40%{ transform: translate3d(-6%, 8%, 0) scale(1.06); }
-    70%{ transform: translate3d(5%, 3%, 0) scale(0.94); }
-}
-
-@keyframes thinking-orb-pink{
-    0%, 100%{ transform: translate3d(0, 0, 0) scale(1); }
-    35%{ transform: translate3d(-8%, 4%, 0) scale(1.1); }
-    68%{ transform: translate3d(-3%, -5%, 0) scale(0.95); }
-}
-
-@keyframes thinking-orb-cyan{
-    0%, 100%{ transform: translate3d(0, 0, 0) scale(1); }
-    45%{ transform: translate3d(10%, -3%, 0) scale(1.07); }
-    75%{ transform: translate3d(6%, 7%, 0) scale(0.97); }
-}
-
-@keyframes thinking-orb-amber{
-    0%, 100%{ transform: translate3d(0, 0, 0) scale(1); }
-    38%{ transform: translate3d(-5%, -6%, 0) scale(1.05); }
-    72%{ transform: translate3d(7%, 2%, 0) scale(0.98); }
-}
-
-@keyframes thinking-orb-emerald{
-    0%, 100%{ transform: translate3d(0, 0, 0) scale(1); }
-    42%{ transform: translate3d(-7%, 5%, 0) scale(1.09); }
-    78%{ transform: translate3d(4%, -4%, 0) scale(0.96); }
-}
 
 @media (max-width: 680px){
     .thinking-radial-glow{
@@ -1083,7 +1121,7 @@ body.hide-header .prompt{
         animation: none;
     }
 
-    .thinking-radial-glow__orb{
+    .thinking-radial-glow__flow{
         animation: none !important;
     }
 }
