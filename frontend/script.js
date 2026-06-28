@@ -26,6 +26,14 @@ const authPasswordInput = document.getElementById("authPassword");
 const authSubmitButton = document.getElementById("authSubmitButton");
 const authStatus = document.getElementById("authStatus");
 const profileModal = document.getElementById("profileModal");
+const settingsModal = document.getElementById("settingsModal");
+const settingsNav = document.getElementById("settingsNav");
+const sponsorMarkdownContent = document.getElementById("sponsorMarkdownContent");
+const feedbackForm = document.getElementById("feedbackForm");
+const feedbackTitleInput = document.getElementById("feedbackTitle");
+const feedbackContentInput = document.getElementById("feedbackContent");
+const feedbackStatus = document.getElementById("feedbackStatus");
+const feedbackSubmitButton = document.getElementById("feedbackSubmitButton");
 const profileForm = document.getElementById("profileForm");
 const profileDisplayNameInput = document.getElementById("profileDisplayName");
 const profileFullNameInput = document.getElementById("profileFullName");
@@ -350,16 +358,123 @@ const setProfileStatusText = (text = "", isError = false) => {
   profileStatus.classList.toggle("modal-status--error", isError);
 };
 
+const modalCloseTimers = new WeakMap();
+
+const getModalCard = (modalElement) => modalElement?.querySelector(".modal-card");
+
 const openModal = (modalElement) => {
   if (!modalElement) return;
+  const pendingTimer = modalCloseTimers.get(modalElement);
+  if (pendingTimer) {
+    window.clearTimeout(pendingTimer);
+    modalCloseTimers.delete(modalElement);
+  }
   modalElement.classList.remove("hide");
   modalElement.setAttribute("aria-hidden", "false");
+  const modalCard = getModalCard(modalElement);
+  modalCard?.classList.remove("is-visible");
+  modalElement.classList.remove("is-visible");
+  requestAnimationFrame(() => {
+    modalElement.classList.add("is-visible");
+    modalCard?.classList.add("is-visible");
+  });
 };
 
 const closeModal = (modalElement) => {
-  if (!modalElement) return;
-  modalElement.classList.add("hide");
-  modalElement.setAttribute("aria-hidden", "true");
+  if (!modalElement || modalElement.classList.contains("hide")) return;
+  modalElement.classList.remove("is-visible");
+  getModalCard(modalElement)?.classList.remove("is-visible");
+  const timer = window.setTimeout(() => {
+    if (!modalElement.classList.contains("is-visible")) {
+      modalElement.classList.add("hide");
+      modalElement.setAttribute("aria-hidden", "true");
+    }
+    modalCloseTimers.delete(modalElement);
+  }, 240);
+  modalCloseTimers.set(modalElement, timer);
+};
+
+let settingsTab = "sponsor";
+let sponsorMarkdownCache = null;
+let sponsorMarkdownLoading = null;
+
+const setSettingsTab = (tab) => {
+  settingsTab = tab === "feedback" ? "feedback" : "sponsor";
+  settingsNav?.querySelectorAll("[data-settings-tab]").forEach((button) => {
+    button.classList.toggle("is-active", button.dataset.settingsTab === settingsTab);
+  });
+  document.querySelectorAll("[data-settings-panel]").forEach((panel) => {
+    panel.classList.toggle("is-active", panel.dataset.settingsPanel === settingsTab);
+  });
+};
+
+const setFeedbackStatusText = (text = "", isError = false) => {
+  if (!feedbackStatus) return;
+  feedbackStatus.textContent = text;
+  feedbackStatus.classList.toggle("modal-status--error", isError);
+};
+
+const loadSponsorMarkdown = async () => {
+  if (sponsorMarkdownCache && sponsorMarkdownContent) {
+    sponsorMarkdownContent.innerHTML = marked.parse(sponsorMarkdownCache);
+    return;
+  }
+  if (sponsorMarkdownLoading) {
+    await sponsorMarkdownLoading;
+    return;
+  }
+  sponsorMarkdownLoading = (async () => {
+    try {
+      const response = await fetch("assets/content/sponsor.md", { cache: "no-cache" });
+      if (!response.ok) throw new Error("加载失败");
+      const markdown = await response.text();
+      sponsorMarkdownCache = markdown;
+      if (sponsorMarkdownContent) {
+        sponsorMarkdownContent.innerHTML = marked.parse(markdown);
+      }
+    } catch {
+      if (sponsorMarkdownContent) {
+        sponsorMarkdownContent.innerHTML = marked.parse("> 赞助内容加载失败，请稍后重试。");
+      }
+    } finally {
+      sponsorMarkdownLoading = null;
+    }
+  })();
+  await sponsorMarkdownLoading;
+};
+
+const openSettingsModal = () => {
+  setSettingsTab("sponsor");
+  setFeedbackStatusText("");
+  openModal(settingsModal);
+  void loadSponsorMarkdown();
+};
+
+const handleFeedbackSubmit = async (event) => {
+  event.preventDefault();
+  const title = feedbackTitleInput?.value?.trim() || "";
+  const content = feedbackContentInput?.value?.trim() || "";
+  if (!title || !content) {
+    setFeedbackStatusText("请填写标题和内容", true);
+    return;
+  }
+  if (feedbackSubmitButton) feedbackSubmitButton.disabled = true;
+  try {
+    const response = await authFetch(config.FEEDBACK_URL, {
+      method: "POST",
+      body: JSON.stringify({ title, content }),
+    });
+    if (!response.ok) {
+      setFeedbackStatusText(await parseErrorMessage(response, "提交失败"), true);
+      return;
+    }
+    feedbackForm?.reset();
+    setFeedbackStatusText("反馈已提交，感谢你的意见！");
+  } catch (error) {
+    setFeedbackStatusText(error?.message || "提交失败", true);
+  } finally {
+    if (feedbackSubmitButton) feedbackSubmitButton.disabled = false;
+  }
 };
 
 const setAuthMode = (mode = "login") => {
@@ -1907,7 +2022,19 @@ const bindModalEvents = () => {
   sidebarUserCard?.addEventListener("click", () => {
     void openProfileModal();
   });
-  sidebarSettingsButton?.addEventListener("click", () => {});
+  sidebarSettingsButton?.addEventListener("click", () => {
+    openSettingsModal();
+  });
+  settingsNav?.addEventListener("click", (event) => {
+    const button = event.target.closest("[data-settings-tab]");
+    if (!button) return;
+    const tab = button.dataset.settingsTab;
+    if (!tab || tab === settingsTab) return;
+    setSettingsTab(tab);
+  });
+  feedbackForm?.addEventListener("submit", (event) => {
+    void handleFeedbackSubmit(event);
+  });
   usageToggleGroup?.addEventListener("click", (event) => {
     const modeButton = event.target.closest("[data-usage-mode]");
     if (!modeButton) return;

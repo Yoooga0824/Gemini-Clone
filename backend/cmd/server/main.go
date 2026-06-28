@@ -58,16 +58,21 @@ func main() {
 	if err := database.RunInitMigration(db, filepath.Join("migrations", "001_init.sql")); err != nil {
 		log.Fatalf("run migration failed: %v", err)
 	}
+	if err := database.RunInitMigration(db, filepath.Join("migrations", "002_feedback.sql")); err != nil {
+		log.Fatalf("run feedback migration failed: %v", err)
+	}
 
 	userRepo := repository.NewUserRepository(db)
 	usageRepo := repository.NewUsageRepository(db)
 	chatRepo := repository.NewChatRepository(db)
 	adminRepo := repository.NewAdminRepository(db)
+	feedbackRepo := repository.NewFeedbackRepository(db)
 
 	authService := service.NewAuthService(userRepo, cfg.JWTSecret, cfg.JWTExpiryHours, cfg.AdminEmail)
 	userService := service.NewUserService(userRepo, cfg.AdminEmail)
 	usageService := service.NewUsageService(usageRepo, userRepo)
 	adminService := service.NewAdminService(userRepo, adminRepo, cfg.AdminEmail)
+	feedbackService := service.NewFeedbackService(feedbackRepo, userRepo)
 	modelGenerators := make(map[string]service.Generator, len(llmClients))
 	for modelKey, client := range llmClients {
 		modelGenerators[modelKey] = client
@@ -80,6 +85,7 @@ func main() {
 	chatHandler := handlers.NewChatHandler(chatService)
 	adminHandler := handlers.NewAdminHandler(adminService)
 	visitHandler := handlers.NewVisitHandler(adminService, cfg.JWTSecret)
+	feedbackHandler := handlers.NewFeedbackHandler(feedbackService, cfg.JWTSecret)
 	router := api.NewRouter(
 		chatHandler,
 		authHandler,
@@ -87,6 +93,7 @@ func main() {
 		usageHandler,
 		adminHandler,
 		visitHandler,
+		feedbackHandler,
 		userRepo,
 		cfg.AllowedOrigin,
 		cfg.JWTSecret,

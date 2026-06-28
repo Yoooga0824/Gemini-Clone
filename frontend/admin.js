@@ -19,6 +19,9 @@ const tokenFocusTable = document.getElementById("tokenFocusTable");
 const tokenDailyTable = document.getElementById("tokenDailyTable");
 const tokenUsersTable = document.getElementById("tokenUsersTable");
 const tokenUserDetail = document.getElementById("tokenUserDetail");
+const feedbackCards = document.getElementById("feedbackCards");
+const feedbackList = document.getElementById("feedbackList");
+const feedbackDetail = document.getElementById("feedbackDetail");
 const backToChatBtn = document.getElementById("backToChatBtn");
 const adminLogoutBtn = document.getElementById("adminLogoutBtn");
 
@@ -32,6 +35,8 @@ let tokenSplitMode = "today";
 let activeTokenUserID = 0;
 let visitStatsCache = null;
 let tokenUserDetailCache = null;
+let feedbackCache = [];
+let activeFeedbackID = 0;
 
 let visitTrendChartInstance = null;
 let tokenFocusChartInstance = null;
@@ -178,6 +183,14 @@ const scheduleChartsForTab = (tab) => {
 
 const formatNumber = (value = 0) => Number(value || 0).toLocaleString("zh-CN");
 
+const escapeHtml = (value = "") =>
+  String(value)
+    .replaceAll("&", "&amp;")
+    .replaceAll("<", "&lt;")
+    .replaceAll(">", "&gt;")
+    .replaceAll('"', "&quot;")
+    .replaceAll("'", "&#39;");
+
 const setStatus = (text = "", isError = false) => {
   if (!adminStatus) return;
   adminStatus.textContent = text;
@@ -239,6 +252,7 @@ const setTab = (tab) => {
     users: "用户管理",
     visits: "访问统计",
     tokens: "Token使用总量",
+    feedback: "用户反馈",
   };
   tabTitle.textContent = titleMap[tab] || "后台管理";
   document.querySelectorAll(".admin-nav__item").forEach((button) => {
@@ -248,6 +262,99 @@ const setTab = (tab) => {
     panel.classList.toggle("is-active", panel.dataset.tabContent === tab);
   });
   scheduleChartsForTab(tab);
+};
+
+const renderFeedbackCards = () => {
+  if (!feedbackCards) return;
+  const total = feedbackCache.length;
+  const unread = feedbackCache.filter((item) => item.status === "new").length;
+  feedbackCards.innerHTML = `
+    <div class="stat-card">
+      <div class="stat-card__label">反馈总数</div>
+      <div class="stat-card__value">${formatNumber(total)}</div>
+    </div>
+    <div class="stat-card">
+      <div class="stat-card__label">未读反馈</div>
+      <div class="stat-card__value">${formatNumber(unread)}</div>
+    </div>
+  `;
+};
+
+const renderFeedbackList = () => {
+  if (!feedbackList) return;
+  if (!feedbackCache.length) {
+    feedbackList.innerHTML = `<div class="detail-placeholder">暂无反馈</div>`;
+    return;
+  }
+  feedbackList.innerHTML = feedbackCache
+    .map((item) => {
+      const badgeClass = item.status === "read" ? "feedback-item__badge--read" : "feedback-item__badge--new";
+      const badgeText = item.status === "read" ? "已读" : "未读";
+      const userLabel = item.user_display_name || item.user_email || "匿名用户";
+      return `
+      <button type="button" class="feedback-item ${Number(item.id) === Number(activeFeedbackID) ? "is-active" : ""}" data-feedback-id="${item.id}">
+        <div class="feedback-item__title">
+          ${escapeHtml(item.title || "无标题")}
+          <span class="feedback-item__badge ${badgeClass}">${badgeText}</span>
+        </div>
+        <div class="feedback-item__meta">${escapeHtml(userLabel)} · ${escapeHtml(item.created_at || "-")}</div>
+      </button>
+    `;
+    })
+    .join("");
+};
+
+const renderFeedbackDetail = (item) => {
+  if (!feedbackDetail) return;
+  if (!item) {
+    feedbackDetail.innerHTML = `<div class="detail-placeholder">请选择左侧反馈</div>`;
+    return;
+  }
+  const userLabel = item.user_display_name || item.user_email || "匿名用户";
+  const markReadButton =
+    item.status === "read"
+      ? `<button type="button" class="ghost-btn" disabled>已读</button>`
+      : `<button type="button" class="ghost-btn" data-mark-feedback-read="${item.id}">标记已读</button>`;
+  feedbackDetail.innerHTML = `
+    <h4 class="feedback-detail__title">${escapeHtml(item.title || "无标题")}</h4>
+    <div class="feedback-detail__meta">${escapeHtml(userLabel)}${item.user_email ? ` · ${escapeHtml(item.user_email)}` : ""} · ${escapeHtml(item.created_at || "-")}</div>
+    <div class="feedback-detail__content">${escapeHtml(item.content || "")}</div>
+    <div class="feedback-detail__actions">${markReadButton}</div>
+  `;
+};
+
+const loadFeedback = async () => {
+  const response = await authFetch(config.ADMIN_FEEDBACK_URL, { method: "GET" });
+  if (!response.ok) {
+    throw new Error(await parseErrorMessage(response, "加载反馈失败"));
+  }
+  const payload = await response.json();
+  feedbackCache = Array.isArray(payload?.feedback) ? payload.feedback : [];
+  if (!activeFeedbackID && feedbackCache.length) {
+    activeFeedbackID = Number(feedbackCache[0].id || 0);
+  }
+  renderFeedbackCards();
+  renderFeedbackList();
+  const activeItem = feedbackCache.find((item) => Number(item.id) === Number(activeFeedbackID));
+  renderFeedbackDetail(activeItem || null);
+};
+
+const markFeedbackRead = async (feedbackID) => {
+  if (!feedbackID) return;
+  const response = await authFetch(`${config.ADMIN_FEEDBACK_URL}/${feedbackID}`, {
+    method: "PATCH",
+    body: JSON.stringify({ status: "read" }),
+  });
+  if (!response.ok) {
+    throw new Error(await parseErrorMessage(response, "标记已读失败"));
+  }
+  feedbackCache = feedbackCache.map((item) =>
+    Number(item.id) === Number(feedbackID) ? { ...item, status: "read" } : item
+  );
+  renderFeedbackCards();
+  renderFeedbackList();
+  const activeItem = feedbackCache.find((item) => Number(item.id) === Number(activeFeedbackID));
+  renderFeedbackDetail(activeItem || null);
 };
 
 const renderUsers = () => {
@@ -646,6 +753,8 @@ const refreshCurrentTab = async () => {
       await loadUsers();
     } else if (currentTab === "visits") {
       await loadVisitStats();
+    } else if (currentTab === "feedback") {
+      await loadFeedback();
     } else {
       await loadTokenStats();
     }
@@ -697,6 +806,33 @@ const bindEvents = () => {
     void loadTokenUserDetail(userID);
   });
 
+  feedbackList?.addEventListener("click", (event) => {
+    const button = event.target.closest("[data-feedback-id]");
+    if (!button) return;
+    const feedbackID = Number(button.dataset.feedbackId);
+    if (!feedbackID) return;
+    activeFeedbackID = feedbackID;
+    renderFeedbackList();
+    const activeItem = feedbackCache.find((item) => Number(item.id) === Number(activeFeedbackID));
+    renderFeedbackDetail(activeItem || null);
+  });
+
+  feedbackDetail?.addEventListener("click", (event) => {
+    const button = event.target.closest("[data-mark-feedback-read]");
+    if (!button) return;
+    const feedbackID = Number(button.dataset.markFeedbackRead);
+    if (!feedbackID) return;
+    void (async () => {
+      try {
+        setStatus("正在标记已读...");
+        await markFeedbackRead(feedbackID);
+        setStatus("已标记为已读");
+      } catch (error) {
+        setStatus(error.message || "标记失败", true);
+      }
+    })();
+  });
+
   refreshBtn?.addEventListener("click", () => {
     void refreshCurrentTab();
   });
@@ -718,7 +854,7 @@ const init = async () => {
   if (!ok) return;
   setTab("users");
   try {
-    await Promise.all([loadUsers(), loadVisitStats(), loadTokenStats()]);
+    await Promise.all([loadUsers(), loadVisitStats(), loadTokenStats(), loadFeedback()]);
     setStatus("数据已加载");
   } catch (error) {
     setStatus(error.message || "初始化失败", true);

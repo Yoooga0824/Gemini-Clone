@@ -30,6 +30,10 @@
             <i class="bx bx-coin-stack"></i>
             Token使用总量
           </button>
+          <button type="button" class="admin-nav__item" data-tab="feedback">
+            <i class="bx bx-message-square-dots"></i>
+            用户反馈
+          </button>
         </nav>
         <div class="admin-sidebar__actions">
           <button type="button" class="ghost-btn" id="backToChatBtn">返回聊天</button>
@@ -138,6 +142,21 @@
                   <tbody id="tokenDailyTable"></tbody>
                 </table>
               </div>
+            </article>
+          </div>
+        </section>
+
+        <section class="admin-tab" data-tab-content="feedback">
+          <div class="stats-row" id="feedbackCards"></div>
+          <div class="panel-grid panel-grid--feedback">
+            <article class="panel">
+              <h3>反馈列表</h3>
+              <p class="panel-tip">点击反馈条目可查看详情，并标记为已读。</p>
+              <div id="feedbackList" class="list"></div>
+            </article>
+            <article class="panel">
+              <h3>反馈详情</h3>
+              <div id="feedbackDetail" class="detail-placeholder">请选择左侧反馈</div>
             </article>
           </div>
         </section>

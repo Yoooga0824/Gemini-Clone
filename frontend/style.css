@@ -1671,6 +1671,12 @@ body.sidebar-collapsed .sidebar__brand:hover .sidebar__expand-btn{
     align-items: center;
     justify-content: center;
     padding: 1rem;
+    opacity: 0;
+    transition: opacity 0.24s ease;
+}
+
+.modal-overlay.is-visible{
+    opacity: 1;
 }
 
 .modal-card{
@@ -1687,10 +1693,216 @@ body.sidebar-collapsed .sidebar__brand:hover .sidebar__expand-btn{
     box-shadow: 0 24px 70px rgba(0, 0, 0, 0.42);
     padding: 1rem 1rem 1.15rem;
     position: relative;
+    opacity: 0;
+    transform: translateY(14px) scale(0.97);
+    transition: opacity 0.26s ease, transform 0.28s cubic-bezier(0.22, 1, 0.36, 1);
+}
+
+.modal-card.is-visible{
+    opacity: 1;
+    transform: translateY(0) scale(1);
 }
 
 .modal-card--wide{
     width: min(640px, calc(100vw - 1.5rem));
+}
+
+.modal-card--settings{
+    width: min(760px, calc(100vw - 1.5rem));
+    padding: 0;
+    overflow: hidden;
+}
+
+.settings-modal{
+    display: grid;
+    grid-template-columns: 196px minmax(0, 1fr);
+    min-height: 420px;
+    max-height: calc(100vh - 2.5rem);
+}
+
+.settings-modal__nav{
+    padding: 1.15rem 0.85rem 1rem;
+    border-right: 1px solid color-mix(in srgb, var(--secondary-hover-color) 58%, transparent);
+    background: color-mix(in srgb, var(--secondary-color) 78%, transparent);
+}
+
+.settings-modal__title{
+    margin: 0 0 0.85rem 0.35rem;
+    font-size: 1.05rem;
+    font-weight: 600;
+    background: linear-gradient(to right, #4a90e2, #a355b9, #ff6b6b);
+    background-clip: text;
+    -webkit-background-clip: text;
+    color: transparent;
+    -webkit-text-fill-color: transparent;
+}
+
+.settings-modal__nav-list{
+    display: flex;
+    flex-direction: column;
+    gap: 0.35rem;
+}
+
+.settings-nav-btn{
+    border: none;
+    background: transparent;
+    color: var(--text-secondary-color);
+    border-radius: 12px;
+    padding: 0.62rem 0.72rem;
+    display: inline-flex;
+    align-items: center;
+    gap: 0.55rem;
+    font-size: 0.92rem;
+    cursor: pointer;
+    transition: background 0.2s ease, color 0.2s ease, transform 0.2s cubic-bezier(0.22, 1, 0.36, 1);
+}
+
+.settings-nav-btn i{
+    font-size: 1.05rem;
+}
+
+.settings-nav-btn:hover{
+    background: color-mix(in srgb, var(--button-hover-color) 88%, transparent);
+    color: var(--text-color);
+}
+
+.settings-nav-btn.is-active{
+    background: linear-gradient(135deg, rgba(59, 130, 246, 0.22), rgba(139, 92, 246, 0.18), rgba(236, 72, 153, 0.14));
+    color: var(--text-color);
+    box-shadow: inset 0 0 0 1px color-mix(in srgb, #8b5cf6 28%, transparent);
+}
+
+.settings-modal__content{
+    position: relative;
+    padding: 1.15rem 1.1rem 1.2rem;
+    overflow: auto;
+    min-height: 0;
+    display: grid;
+}
+
+.settings-panel{
+    grid-area: 1 / 1;
+    opacity: 0;
+    visibility: hidden;
+    pointer-events: none;
+    transform: translateX(10px);
+    transition: opacity 0.22s ease, transform 0.24s cubic-bezier(0.22, 1, 0.36, 1), visibility 0.22s ease;
+}
+
+.settings-panel.is-active{
+    opacity: 1;
+    visibility: visible;
+    pointer-events: auto;
+    transform: translateX(0);
+}
+
+.settings-panel__head{
+    margin-bottom: 0.85rem;
+}
+
+.settings-panel__title{
+    margin: 0;
+    font-size: 1.02rem;
+    font-weight: 600;
+    color: var(--text-color);
+}
+
+.settings-panel__subtitle{
+    margin: 0.28rem 0 0;
+    color: var(--placeholder-color);
+    font-size: 0.84rem;
+}
+
+.settings-markdown{
+    border-radius: 12px;
+    border: 1px solid color-mix(in srgb, var(--secondary-hover-color) 55%, transparent);
+    background: color-mix(in srgb, var(--secondary-color) 72%, transparent);
+    padding: 0.95rem 1rem;
+    max-height: min(52vh, 420px);
+    overflow: auto;
+    color: var(--text-color);
+    line-height: 1.65;
+    font-size: 0.92rem;
+}
+
+.settings-markdown__loading{
+    color: var(--placeholder-color);
+    font-size: 0.86rem;
+}
+
+.settings-markdown :where(h1, h2, h3, p, ul, ol, li, blockquote){
+    margin: 0;
+}
+
+.settings-markdown > :where(p, ul, ol, pre, blockquote, h1, h2, h3) + :where(p, ul, ol, pre, blockquote, h1, h2, h3){
+    margin-top: 0.72rem;
+}
+
+.settings-markdown h1{
+    font-size: 1.18rem;
+}
+
+.settings-markdown h2{
+    font-size: 1.05rem;
+}
+
+.settings-markdown h3{
+    font-size: 0.98rem;
+}
+
+.settings-markdown a{
+    color: var(--prose-link-color);
+    text-decoration: underline;
+    text-decoration-color: color-mix(in srgb, var(--prose-link-color) 54%, transparent);
+}
+
+.settings-markdown a:hover{
+    color: var(--prose-link-hover-color);
+}
+
+.settings-markdown blockquote{
+    padding: 0.55rem 0.75rem;
+    border-left: 2px solid var(--prose-quote-border);
+    background: var(--prose-quote-bg);
+    border-radius: 0 8px 8px 0;
+}
+
+.settings-markdown code{
+    padding: 0.12rem 0.35rem;
+    border-radius: 6px;
+    border: 1px solid var(--prose-code-inline-border);
+    background: var(--prose-code-inline-bg);
+    font-size: 0.86em;
+}
+
+.settings-feedback-form{
+    margin-top: 0.2rem;
+}
+
+.settings-feedback-submit{
+    margin-top: 0.35rem;
+}
+
+@media (max-width: 680px){
+    .settings-modal{
+        grid-template-columns: 1fr;
+        min-height: auto;
+    }
+
+    .settings-modal__nav{
+        border-right: none;
+        border-bottom: 1px solid color-mix(in srgb, var(--secondary-hover-color) 58%, transparent);
+        padding-bottom: 0.75rem;
+    }
+
+    .settings-modal__nav-list{
+        flex-direction: row;
+    }
+
+    .settings-nav-btn{
+        flex: 1;
+        justify-content: center;
+    }
 }
 
 .modal-close-btn{

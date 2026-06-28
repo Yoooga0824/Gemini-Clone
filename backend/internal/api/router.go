@@ -18,6 +18,7 @@ func NewRouter(
 	usageHandler *handlers.UsageHandler,
 	adminHandler *handlers.AdminHandler,
 	visitHandler *handlers.VisitHandler,
+	feedbackHandler *handlers.FeedbackHandler,
 	userRepo *repository.UserRepository,
 	allowedOrigin string,
 	jwtSecret string,
@@ -33,6 +34,7 @@ func NewRouter(
 	mux.HandleFunc("/api/auth/register", authHandler.PostRegister)
 	mux.HandleFunc("/api/auth/login", authHandler.PostLogin)
 	mux.HandleFunc("/api/visit", visitHandler.PostVisit)
+	mux.HandleFunc("/api/feedback", feedbackHandler.PostFeedback)
 	mux.HandleFunc("/api/me", middleware.RequireAuth(jwtSecret, routeMethods(userHandler.GetMe, userHandler.PatchMe)))
 	mux.HandleFunc("/api/me/avatar", middleware.RequireAuth(jwtSecret, userHandler.PostAvatar))
 	mux.HandleFunc("/api/usage", middleware.RequireAuth(jwtSecret, usageHandler.GetUsageSummary))
@@ -54,6 +56,14 @@ func NewRouter(
 	mux.HandleFunc(
 		"/api/admin/stats/tokens",
 		middleware.RequireAdmin(jwtSecret, adminEmail, userRepo, adminHandler.GetTokenOverview),
+	)
+	mux.HandleFunc(
+		"/api/admin/feedback",
+		middleware.RequireAdmin(jwtSecret, adminEmail, userRepo, feedbackHandler.GetFeedback),
+	)
+	mux.HandleFunc(
+		"/api/admin/feedback/",
+		middleware.RequireAdmin(jwtSecret, adminEmail, userRepo, feedbackHandler.HandleFeedbackActions),
 	)
 	mux.Handle("/uploads/", http.StripPrefix("/uploads/", http.FileServer(http.Dir(filepath.Clean(uploadsRoot)))))
 

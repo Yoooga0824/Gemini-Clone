@@ -319,6 +319,60 @@
         <div class="modal-status" id="profileStatus"></div>
       </div>
     </div>
+
+    <div class="modal-overlay hide" id="settingsModal" aria-hidden="true">
+      <div class="modal-card modal-card--settings" role="dialog" aria-modal="true" aria-label="设置">
+        <button type="button" class="modal-close-btn" data-close-modal="settingsModal" aria-label="关闭">
+          <i class="bx bx-x"></i>
+        </button>
+        <div class="settings-modal">
+          <aside class="settings-modal__nav">
+            <h2 class="settings-modal__title">设置</h2>
+            <nav class="settings-modal__nav-list" id="settingsNav">
+              <button type="button" class="settings-nav-btn is-active" data-settings-tab="sponsor">
+                <i class="bx bx-heart"></i>
+                <span>赞助</span>
+              </button>
+              <button type="button" class="settings-nav-btn" data-settings-tab="feedback">
+                <i class="bx bx-message-square-dots"></i>
+                <span>反馈</span>
+              </button>
+            </nav>
+          </aside>
+          <div class="settings-modal__content">
+            <section class="settings-panel is-active" data-settings-panel="sponsor" aria-label="赞助">
+              <div class="settings-panel__head">
+                <h3 class="settings-panel__title">赞助</h3>
+                <p class="settings-panel__subtitle">感谢你对 YoooFind 的支持</p>
+              </div>
+              <div class="settings-markdown" id="sponsorMarkdownContent">
+                <div class="settings-markdown__loading">加载中...</div>
+              </div>
+            </section>
+            <section class="settings-panel" data-settings-panel="feedback" aria-label="反馈">
+              <div class="settings-panel__head">
+                <h3 class="settings-panel__title">反馈</h3>
+                <p class="settings-panel__subtitle">遇到问题或有建议？告诉我们</p>
+              </div>
+              <form class="modal-form settings-feedback-form" id="feedbackForm">
+                <label class="modal-field">
+                  <span>标题</span>
+                  <input id="feedbackTitle" type="text" maxlength="200" required placeholder="简要描述你的反馈" />
+                </label>
+                <label class="modal-field">
+                  <span>内容</span>
+                  <textarea id="feedbackContent" rows="6" maxlength="5000" required placeholder="请详细描述问题或建议"></textarea>
+                </label>
+                <button type="submit" class="modal-primary-btn settings-feedback-submit" id="feedbackSubmitButton">
+                  提交反馈
+                </button>
+              </form>
+              <div class="modal-status" id="feedbackStatus"></div>
+            </section>
+          </div>
+        </div>
+      </div>
+    </div>
     <!-- <p class="prompt__disclaim">
       YoooFind 提供的信息可能存在错误，包括涉及个人的信息，请注意甄别并自行核实
     </p> -->

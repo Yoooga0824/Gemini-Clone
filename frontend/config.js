@@ -12,6 +12,8 @@ const config = {
   ADMIN_USERS_URL: "http://localhost:8080/api/admin/users",
   ADMIN_VISIT_STATS_URL: "http://localhost:8080/api/admin/stats/visits",
   ADMIN_TOKEN_STATS_URL: "http://localhost:8080/api/admin/stats/tokens",
+  FEEDBACK_URL: "http://localhost:8080/api/feedback",
+  ADMIN_FEEDBACK_URL: "http://localhost:8080/api/admin/feedback",
 };
 
 export default config;
