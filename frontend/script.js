@@ -1,6 +1,10 @@
+import { createThinkingRadialGlow } from "./thinking-radial-glow.js";
+
 const messageForm = document.querySelector(".prompt__form");
 const chatHistoryContainer = document.querySelector(".chats");
 const promptContainer = document.querySelector(".prompt");
+
+createThinkingRadialGlow({ chatContainer: chatHistoryContainer });
 
 const themeToggleButton = document.getElementById("themeToggler");
 const sidebarElement = document.getElementById("appSidebar");

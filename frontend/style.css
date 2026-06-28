@@ -841,6 +841,63 @@ body.hide-header .prompt{
     scrollbar-color: var(--chat-scrollbar-thumb) var(--chat-scrollbar-track);
     scrollbar-width: thin;
     transition: margin-left 0.3s ease, width 0.3s ease;
+    position: relative;
+    z-index: 1;
+}
+
+.chats .message{
+    position: relative;
+    z-index: 1;
+}
+
+.thinking-radial-glow{
+    position: fixed;
+    top: var(--navbar-safe-offset);
+    left: var(--sidebar-current-width);
+    width: calc(100% - var(--sidebar-current-width));
+    height: calc((100vh - var(--navbar-safe-offset)) * 0.5);
+    pointer-events: none;
+    z-index: 0;
+    opacity: 0;
+    overflow: hidden;
+    transition: left 0.3s ease, width 0.3s ease;
+    -webkit-mask-image: linear-gradient(
+        to bottom,
+        rgba(0, 0, 0, 1) 0%,
+        rgba(0, 0, 0, 0.94) 58%,
+        rgba(0, 0, 0, 0.42) 84%,
+        rgba(0, 0, 0, 0) 100%
+    );
+    mask-image: linear-gradient(
+        to bottom,
+        rgba(0, 0, 0, 1) 0%,
+        rgba(0, 0, 0, 0.94) 58%,
+        rgba(0, 0, 0, 0.42) 84%,
+        rgba(0, 0, 0, 0) 100%
+    );
+}
+
+.thinking-radial-glow__layer{
+    position: absolute;
+    inset: -8% -6%;
+    will-change: background, opacity;
+}
+
+.thinking-radial-glow__layer--secondary{
+    mix-blend-mode: screen;
+    opacity: 0.72;
+}
+
+.light_mode .thinking-radial-glow__layer--secondary{
+    mix-blend-mode: multiply;
+    opacity: 0.55;
+}
+
+@media (max-width: 680px){
+    .thinking-radial-glow{
+        left: 0;
+        width: 100%;
+    }
 }
 
 body.hide-header .chats{
